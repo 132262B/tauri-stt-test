@@ -1,0 +1,8 @@
+[package]
+name = "stt-sidecar-proto"
+version = "0.1.0"
+edition = "2021"
+description = "Rust↔Python 사이드카 메시지/프레임 스키마 (단일 정의, Python 측이 동일 필드 미러)"
+
+# 제어/결과 = stdout NDJSON, PCM = Unix Domain Socket 프레임 (docs/02-architecture.md C.2).
+[dependencies]

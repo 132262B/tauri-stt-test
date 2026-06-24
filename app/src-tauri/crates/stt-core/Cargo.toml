@@ -1,0 +1,9 @@
+[package]
+name = "stt-core"
+version = "0.1.0"
+edition = "2021"
+description = "플랫폼·tauri 무의존 순수 Rust 코어 (캡처 PCM → VAD → ASR(LocalAgreement) → 화자분리 → diff 출력)"
+
+# 이 크레이트는 tauri 를 절대 의존하지 않는다 (docs/02-architecture.md A.2 책임 불변식).
+# 외부와는 입력 mpsc<PcmFrame> / 출력 broadcast<PipelineEvent> 두 채널로만 접한다.
+[dependencies]

@@ -2,7 +2,7 @@
 
 기본: stdin NDJSON 제어 루프(configure/process_iter/set_language/change_speaker/
 warmup/finish), 결과는 stdout NDJSON. PCM 은 UDS(PcmReceiver).
---self-test WAV: 프로토콜 없이 WAV 를 1초 청크로 스트리밍 시뮬레이션해 전사 출력(헤드리스 검증용).
+--self-test WAV: 프로토콜 없이 WAV 를 1초 청크로 스트리밍 시뮬레이션해 전사+화자 출력(헤드리스 검증용).
 """
 import argparse
 import json
@@ -18,32 +18,62 @@ from .online_asr import OnlineASRProcessor
 DEFAULT_MODEL = "mlx-community/whisper-large-v3-turbo"
 
 
-def tokens_to_json(tokens):
+def tokens_to_json(tokens, speaker=None):
     return [
-        {"start": t.start, "end": t.end, "text": t.text, "probability": t.probability}
+        {
+            "start": t.start,
+            "end": t.end,
+            "text": t.text,
+            "probability": t.probability,
+            "speaker": speaker,
+        }
         for t in tokens
     ]
 
 
 class Session:
-    def __init__(self, model_path, language, trimming_sec=15.0):
+    def __init__(self, model_path, language, trimming_sec=15.0, diarize=True):
         self.backend = MLXWhisperBackend(model_path, language)
         self.proc = OnlineASRProcessor(self.backend, buffer_trimming_sec=trimming_sec)
         self.lock = threading.Lock()
         self.receiver = None
+        self.full_audio = np.zeros(0, dtype=np.float32)
+        self.diarizer = None
+        if diarize:
+            try:
+                from .diarizer import OnlineDiarizer
+
+                self.diarizer = OnlineDiarizer()
+                log("diarizer 활성")
+            except Exception as e:  # noqa: BLE001
+                log("diarizer 비활성(임포트 실패):", e)
 
     def attach_uds(self, uds_path):
-        self.receiver = PcmReceiver(uds_path, self._on_pcm)
+        self.receiver = PcmReceiver(uds_path, lambda s, _t: self.feed(s))
         self.receiver.start()
 
-    def _on_pcm(self, samples, _t_end):
+    def feed(self, samples):
         with self.lock:
             self.proc.insert_audio_chunk(samples)
+            self.full_audio = np.append(self.full_audio, samples)
+
+    def _slice(self, start, end):
+        a = int(max(0.0, start) * 16000)
+        b = int(max(0.0, end) * 16000)
+        if b <= a or a >= len(self.full_audio):
+            return None
+        return self.full_audio[a : min(b, len(self.full_audio))]
 
     def process_iter(self):
         with self.lock:
             committed = self.proc.process_iter()
-            return committed, self.proc.get_buffer(), self.proc.get_audio_buffer_end_time()
+            buffer_text = self.proc.get_buffer()
+            upto = self.proc.get_audio_buffer_end_time()
+            seg = self._slice(committed[0].start, committed[-1].end) if committed else None
+        speaker = None
+        if committed and self.diarizer is not None and seg is not None:
+            speaker = self.diarizer.assign(seg)
+        return committed, buffer_text, upto, speaker
 
     def change_speaker(self, at):
         with self.lock:
@@ -73,7 +103,12 @@ def run_protocol():
         try:
             if mtype == "configure":
                 model = msg.get("model") or DEFAULT_MODEL
-                session = Session(model, msg.get("lang"), float(msg.get("trimming_sec", 15.0)))
+                session = Session(
+                    model,
+                    msg.get("lang"),
+                    float(msg.get("trimming_sec", 15.0)),
+                    diarize=bool(msg.get("diarize", True)),
+                )
                 if msg.get("uds_path"):
                     session.attach_uds(msg["uds_path"])
                 write_msg({"type": "ready", "backend": "mlx_whisper", "model": model, "sr": 16000})
@@ -81,8 +116,8 @@ def run_protocol():
                 if session is None:
                     write_msg({"type": "error", "code": "not_configured", "msg": "configure first"})
                     continue
-                committed, buffer_text, upto = session.process_iter()
-                write_msg({"type": "tokens", "committed": tokens_to_json(committed),
+                committed, buffer_text, upto, speaker = session.process_iter()
+                write_msg({"type": "tokens", "committed": tokens_to_json(committed, speaker),
                            "buffer": buffer_text, "upto": upto, "is_final": False})
             elif mtype == "set_language":
                 if session:
@@ -129,20 +164,16 @@ def run_self_test(path, model, lang):
     if audio.ndim > 1:
         audio = audio.mean(axis=1)
     audio = _resample_linear(audio, sr)
-    backend = MLXWhisperBackend(model, lang)
-    proc = OnlineASRProcessor(backend, buffer_trimming_sec=15.0)
+    sess = Session(model, lang, diarize=True)
     chunk = 16000  # 1초
     committed_all = []
     for i in range(0, len(audio), chunk):
-        proc.insert_audio_chunk(audio[i : i + chunk])
-        committed = proc.process_iter()
+        sess.feed(audio[i : i + chunk])
+        committed, _buf, _upto, spk = sess.process_iter()
         committed_all += committed
         if committed:
-            log("COMMIT:", "".join(t.text for t in committed))
-        buf = proc.get_buffer()
-        if buf:
-            log("  buffer:", buf)
-    committed_all += proc.finish()
+            log(f"COMMIT[spk={spk}]:", "".join(t.text for t in committed))
+    committed_all += sess.finish()
     full = "".join(t.text for t in committed_all)
     log("=== FINAL TRANSCRIPT ===")
     print(full)

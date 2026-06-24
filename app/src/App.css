@@ -109,16 +109,36 @@ button:active {
 
 .transcript {
   font-size: 1.05rem;
-  line-height: 1.7;
+  line-height: 1.6;
+}
+
+.line {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+  align-items: baseline;
+}
+
+.speaker-badge {
+  flex: 0 0 auto;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.speaker-badge.ghost {
+  background: transparent !important;
+  color: #888;
+}
+
+.line-text {
   white-space: pre-wrap;
-  margin: 0;
 }
 
-.committed {
-  color: inherit;
-}
-
-.partial {
+.line-text.partial {
   opacity: 0.45;
   font-style: italic;
 }

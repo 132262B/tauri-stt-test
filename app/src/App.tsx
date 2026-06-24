@@ -4,14 +4,20 @@ import { listen } from "@tauri-apps/api/event";
 import { save } from "@tauri-apps/plugin-dialog";
 import "./App.css";
 
-// P1 커밋9: 마이크 → 사이드카(MLX Whisper) → transcript_update 수신·렌더.
-// 화자 라벨/자원 모니터/백엔드 전환은 P1.5/P2.
+// P1.5: 마이크 → 사이드카(MLX Whisper + 화자분리) → 화자별 라인 렌더 + 자원 모니터 + 내보내기.
+interface TranscriptLine {
+  speaker: number | null;
+  text: string;
+  start: number;
+  end: number;
+}
 interface TranscriptSnapshot {
   committedText: string;
+  lines: TranscriptLine[];
   buffer: string;
+  bufferSpeaker: number | null;
   upto: number;
 }
-
 interface Metrics {
   cpuPct: number;
   rssMb: number;
@@ -23,11 +29,19 @@ interface Metrics {
   model: string;
 }
 
+const SPEAKER_COLORS = ["#2e7d32", "#1565c0", "#c2185b", "#e67e22", "#6a1b9a", "#00838f"];
+function speakerColor(s: number | null): string {
+  return s == null ? "#888" : SPEAKER_COLORS[s % SPEAKER_COLORS.length];
+}
+function speakerName(s: number | null): string {
+  return s == null ? "화자?" : `화자 ${s + 1}`;
+}
+
 function App() {
   const [ipc, setIpc] = useState("연결 확인 중…");
   const [running, setRunning] = useState(false);
   const [err, setErr] = useState("");
-  const [committed, setCommitted] = useState("");
+  const [lines, setLines] = useState<TranscriptLine[]>([]);
   const [buffer, setBuffer] = useState("");
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -38,7 +52,7 @@ function App() {
       .catch((e) => setIpc(`IPC 오류: ${e}`));
 
     const un1 = listen<TranscriptSnapshot>("transcript_update", (e) => {
-      setCommitted(e.payload.committedText);
+      setLines(e.payload.lines);
       setBuffer(e.payload.buffer);
     });
     const un2 = listen("transcript_done", () => setBuffer(""));
@@ -52,7 +66,7 @@ function App() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [committed, buffer]);
+  }, [lines, buffer]);
 
   async function exportAs(fmt: "txt" | "srt" | "json") {
     setErr("");
@@ -75,7 +89,7 @@ function App() {
         await invoke("stop_session");
         setRunning(false);
       } else {
-        setCommitted("");
+        setLines([]);
         setBuffer("");
         await invoke("start_session");
         setRunning(true);
@@ -84,6 +98,8 @@ function App() {
       setErr(String(e));
     }
   }
+
+  const hasContent = lines.length > 0 || buffer.length > 0;
 
   return (
     <div className="app">
@@ -94,16 +110,28 @@ function App() {
       <main className="app-body">
         <section className="pane transcript-pane">
           <h2>전사</h2>
-          {!committed && !buffer && (
+          {!hasContent && (
             <p className="placeholder">
-              {running ? "듣는 중… 말하면 전사가 나타납니다." : "마이크 캡처를 시작하세요."}
+              {running ? "듣는 중… 말하면 화자별 전사가 나타납니다." : "마이크 캡처를 시작하세요."}
             </p>
           )}
-          <p className="transcript">
-            <span className="committed">{committed}</span>
-            {buffer && <span className="partial"> {buffer}</span>}
-          </p>
-          {committed && (
+          <div className="transcript">
+            {lines.map((l, i) => (
+              <div className="line" key={i}>
+                <span className="speaker-badge" style={{ background: speakerColor(l.speaker) }}>
+                  {speakerName(l.speaker)}
+                </span>
+                <span className="line-text">{l.text}</span>
+              </div>
+            ))}
+            {buffer && (
+              <div className="line partial-line">
+                <span className="speaker-badge ghost">…</span>
+                <span className="line-text partial">{buffer}</span>
+              </div>
+            )}
+          </div>
+          {lines.length > 0 && (
             <div className="export-bar">
               <span>내보내기:</span>
               <button onClick={() => exportAs("txt")}>txt</button>
@@ -121,8 +149,8 @@ function App() {
             </button>
             <p className="placeholder">
               {running
-                ? "MLX Whisper(turbo) 온디바이스 전사 중. 첫 시작은 모델 로딩에 수 초."
-                : "백엔드 전환·자원 모니터는 다음 단계(P1.5/P2)."}
+                ? "MLX Whisper(turbo) + 화자분리 온디바이스 전사 중. 첫 시작은 모델 로딩에 수 초."
+                : "백엔드 전환·시스템 오디오는 다음 단계(P2)."}
             </p>
             {err && <p className="error">{err}</p>}
           </section>

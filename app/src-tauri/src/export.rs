@@ -4,13 +4,27 @@ use stt_core::output::CommittedToken;
 
 const SENTENCE_ENDS: [char; 6] = ['.', '?', '!', '。', '?', '!'];
 
+fn speaker_label(s: Option<u32>) -> String {
+    match s {
+        Some(n) => format!("[화자 {}] ", n + 1),
+        None => String::new(),
+    }
+}
+
 pub fn to_txt(tokens: &[CommittedToken]) -> String {
-    tokens
-        .iter()
-        .map(|t| t.text.as_str())
-        .collect::<String>()
-        .trim()
-        .to_string()
+    let mut out = String::new();
+    let mut cur: Option<Option<u32>> = None;
+    for t in tokens {
+        if cur != Some(t.speaker) {
+            if !out.is_empty() {
+                out.push('\n');
+            }
+            out.push_str(&speaker_label(t.speaker));
+            cur = Some(t.speaker);
+        }
+        out.push_str(&t.text);
+    }
+    out.trim().to_string()
 }
 
 pub fn to_json(tokens: &[CommittedToken]) -> String {
@@ -18,35 +32,40 @@ pub fn to_json(tokens: &[CommittedToken]) -> String {
     serde_json::json!({ "text": text, "tokens": tokens }).to_string()
 }
 
-/// 0.8s 공백 / 8토큰 / 문장부호 경계에서 cue 를 끊어 SRT 생성.
+/// 화자 변경 / 0.8s 공백 / 8토큰 / 문장부호 경계에서 cue 를 끊어 SRT 생성(화자 라벨 접두).
 pub fn to_srt(tokens: &[CommittedToken]) -> String {
     let mut cues: Vec<(f64, f64, String)> = Vec::new();
-    let mut cur_start = 0usize;
-    let mut buf = String::new();
-    let mut count = 0usize;
-
-    for i in 0..tokens.len() {
-        if count == 0 {
-            cur_start = i;
-            buf.clear();
-        }
-        buf.push_str(&tokens[i].text);
-        count += 1;
-
-        let gap_next = if i + 1 < tokens.len() {
-            tokens[i + 1].start - tokens[i].end
-        } else {
-            f64::INFINITY
-        };
-        let ends_sentence = tokens[i].text.trim_end().ends_with(SENTENCE_ENDS);
-
-        if ends_sentence || count >= 8 || gap_next > 0.8 || i + 1 == tokens.len() {
-            let text = buf.trim().to_string();
-            if !text.is_empty() {
-                cues.push((tokens[cur_start].start, tokens[i].end, text));
+    let mut i = 0usize;
+    while i < tokens.len() {
+        let cur_start = i;
+        let spk = tokens[i].speaker;
+        let mut buf = String::new();
+        let mut count = 0usize;
+        loop {
+            buf.push_str(&tokens[i].text);
+            count += 1;
+            let at_end = i + 1 == tokens.len();
+            let ends_sentence = tokens[i].text.trim_end().ends_with(SENTENCE_ENDS);
+            let gap_next = if at_end {
+                f64::INFINITY
+            } else {
+                tokens[i + 1].start - tokens[i].end
+            };
+            let spk_change = !at_end && tokens[i + 1].speaker != spk;
+            if at_end || ends_sentence || count >= 8 || gap_next > 0.8 || spk_change {
+                break;
             }
-            count = 0;
+            i += 1;
         }
+        let text = buf.trim().to_string();
+        if !text.is_empty() {
+            cues.push((
+                tokens[cur_start].start,
+                tokens[i].end,
+                format!("{}{}", speaker_label(spk), text),
+            ));
+        }
+        i += 1;
     }
 
     let mut out = String::new();
@@ -80,7 +99,29 @@ mod tests {
             start: s,
             end: e,
             text: t.to_string(),
+            speaker: None,
         }
+    }
+
+    fn tok_spk(s: f64, e: f64, t: &str, spk: u32) -> CommittedToken {
+        CommittedToken {
+            start: s,
+            end: e,
+            text: t.to_string(),
+            speaker: Some(spk),
+        }
+    }
+
+    #[test]
+    fn txt_labels_speakers() {
+        let toks = vec![
+            tok_spk(0.0, 0.5, "Hi", 0),
+            tok_spk(0.6, 1.0, " there", 0),
+            tok_spk(2.0, 2.4, "Hello", 1),
+        ];
+        let txt = to_txt(&toks);
+        assert!(txt.starts_with("[화자 1] Hi there"), "{txt}");
+        assert!(txt.contains("\n[화자 2] Hello"), "{txt}");
     }
 
     #[test]

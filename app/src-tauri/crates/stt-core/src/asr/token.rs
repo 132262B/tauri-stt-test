@@ -11,6 +11,9 @@ pub struct AsrToken {
     /// ko/en 코드스위칭(토큰/세그먼트 단위). 현재 사이드카는 미제공.
     #[serde(default)]
     pub detected_language: Option<String>,
+    /// 화자 트랙 id(온라인 diarizer). None=미상.
+    #[serde(default)]
+    pub speaker: Option<u32>,
 }
 
 #[derive(thiserror::Error, Debug)]

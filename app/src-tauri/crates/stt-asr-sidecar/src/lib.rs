@@ -97,6 +97,7 @@ impl SidecarBackend {
                             text: t.text,
                             probability: t.probability,
                             detected_language: None,
+                            speaker: t.speaker,
                         })
                         .collect();
                     return Ok((toks, buffer));

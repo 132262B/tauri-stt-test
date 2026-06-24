@@ -7,16 +7,33 @@ pub struct CommittedToken {
     pub start: f64,
     pub end: f64,
     pub text: String,
+    /// 화자 트랙 id. None=미상.
+    #[serde(default)]
+    pub speaker: Option<u32>,
 }
 
-/// 전사 스냅샷(전체 모드). 화자 라벨·diff/relabel·라인 분할은 P1.5/P2에서 확장.
+/// 화자별로 묶인 확정 전사 라인.
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TranscriptLine {
+    pub speaker: Option<u32>,
+    pub text: String,
+    pub start: f64,
+    pub end: f64,
+}
+
+/// 전사 스냅샷(전체 모드). diff/relabel·소급 화자 정정은 P2에서 확장.
 #[derive(Clone, Debug, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TranscriptSnapshot {
-    /// 확정된 전사 텍스트(누적).
+    /// 확정된 전사 텍스트(누적, 화자 무시한 평문).
     pub committed_text: String,
+    /// 화자별로 묶인 확정 라인.
+    pub lines: Vec<TranscriptLine>,
     /// 미확정 partial.
     pub buffer: String,
+    /// partial 의 화자(현재 미상 → None).
+    pub buffer_speaker: Option<u32>,
     /// 처리된 오디오 끝 시각(초).
     pub upto: f64,
     /// 이번 iter 에 새로 확정된 토큰(누적용 — 내보내기에서 사용).

@@ -35,6 +35,9 @@ pub struct Token {
     pub text: String,
     #[serde(default)]
     pub probability: Option<f32>,
+    /// 화자 트랙 id(온라인 diarizer). None=미상.
+    #[serde(default)]
+    pub speaker: Option<u32>,
 }
 
 /// 결과 메시지 (사이드카 stdout → Rust, NDJSON 1줄).

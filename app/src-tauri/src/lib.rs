@@ -1,4 +1,5 @@
 mod app_state;
+mod capture;
 mod commands;
 mod events;
 
@@ -21,7 +22,11 @@ pub fn run() {
 
     builder
         .manage(AppState::default())
-        .invoke_handler(tauri::generate_handler![commands::ping])
+        .invoke_handler(tauri::generate_handler![
+            commands::ping,
+            commands::start_capture,
+            commands::stop_capture
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

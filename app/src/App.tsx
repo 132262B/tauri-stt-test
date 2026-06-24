@@ -6,12 +6,29 @@ import "./App.css";
 // 실제 전사·모니터·컨트롤은 P1 이후 components/ 로 채운다 (docs/02-architecture.md F).
 function App() {
   const [ipc, setIpc] = useState("연결 확인 중…");
+  const [capturing, setCapturing] = useState(false);
+  const [capErr, setCapErr] = useState("");
 
   useEffect(() => {
     invoke<string>("ping")
       .then((r) => setIpc(`IPC ${r}`))
       .catch((e) => setIpc(`IPC 오류: ${e}`));
   }, []);
+
+  async function toggleCapture() {
+    setCapErr("");
+    try {
+      if (capturing) {
+        await invoke("stop_capture");
+        setCapturing(false);
+      } else {
+        await invoke("start_capture");
+        setCapturing(true);
+      }
+    } catch (e) {
+      setCapErr(String(e));
+    }
+  }
 
   return (
     <div className="app">
@@ -27,7 +44,15 @@ function App() {
         <aside className="pane control-pane">
           <section className="panel">
             <h2>컨트롤</h2>
-            <p className="placeholder">백엔드·입력 선택, 시작/정지 (P1)</p>
+            <button onClick={toggleCapture}>
+              {capturing ? "■ 마이크 정지" : "● 마이크 캡처 시작"}
+            </button>
+            <p className="placeholder">
+              {capturing
+                ? "캡처 중 — 16kHz mono RMS가 dev 콘솔에 출력됩니다."
+                : "백엔드·입력 선택, 전사는 P1 후속 커밋."}
+            </p>
+            {capErr && <p className="error">{capErr}</p>}
           </section>
           <section className="panel">
             <h2>자원 모니터</h2>

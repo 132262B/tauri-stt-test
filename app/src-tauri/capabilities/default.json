@@ -1,10 +1,13 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability for the main window",
+  "description": "데스크톱(macOS/Windows/Linux) 메인 윈도우 권한. shell(사이드카) 스코프는 P1에서 externalBin과 함께 부여.",
+  "platforms": ["macOS", "windows", "linux"],
   "windows": ["main"],
   "permissions": [
     "core:default",
-    "opener:default"
+    "opener:default",
+    "store:default",
+    "dialog:default"
   ]
 }

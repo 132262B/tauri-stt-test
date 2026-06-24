@@ -26,6 +26,9 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
+tauri-plugin-shell = "2"   # 사이드카(externalBin) 실행 — P1에서 스코프 부여
+tauri-plugin-store = "2"   # config·화자 갤러리 경량 저장
+tauri-plugin-dialog = "2"  # 전사 내보내기 저장 대화상자
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 

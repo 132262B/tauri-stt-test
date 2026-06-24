@@ -1,0 +1,13 @@
+{
+  "$schema": "../gen/schemas/mobile-schema.json",
+  "identifier": "mobile",
+  "description": "모바일(iOS) 메인 윈도우 권한. 사이드카(shell)는 iOS 불가이므로 제외 (docs/02-architecture.md 결정3·E.3).",
+  "platforms": ["iOS"],
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "opener:default",
+    "store:default",
+    "dialog:default"
+  ]
+}

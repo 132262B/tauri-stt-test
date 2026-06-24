@@ -20,6 +20,7 @@ pub fn start_session(
     app: tauri::AppHandle,
     state: State<AppState>,
     model: Option<String>,
+    lang: Option<String>,
 ) -> Result<(), String> {
     #[cfg(desktop)]
     {
@@ -27,13 +28,15 @@ pub fn start_session(
         if guard.is_some() {
             return Err("이미 세션 진행 중".into());
         }
-        let handle = crate::session::start(app, state.transcript.clone(), model)?;
+        // 빈 문자열("")은 auto 로 간주.
+        let lang = lang.filter(|s| !s.is_empty());
+        let handle = crate::session::start(app, state.transcript.clone(), model, lang)?;
         *guard = Some(handle);
         Ok(())
     }
     #[cfg(not(desktop))]
     {
-        let _ = (app, state, model);
+        let _ = (app, state, model, lang);
         Err("이 플랫폼의 전사는 아직 미지원(P3)".into())
     }
 }

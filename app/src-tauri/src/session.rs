@@ -29,6 +29,7 @@ pub fn start(
     app: tauri::AppHandle,
     transcript_log: Arc<std::sync::Mutex<Vec<stt_core::output::CommittedToken>>>,
     model_id: Option<String>,
+    lang: Option<String>,
 ) -> Result<SessionHandle, String> {
     use std::path::PathBuf;
     use std::sync::mpsc as std_mpsc;
@@ -52,6 +53,7 @@ pub fn start(
 
     let cfg = AsrConfig {
         model_id: model_id.unwrap_or_else(|| AsrConfig::default().model_id),
+        language: lang,
         ..AsrConfig::default()
     };
     let model = cfg.model_id.clone();

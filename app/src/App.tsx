@@ -54,6 +54,7 @@ function App() {
   const [buffer, setBuffer] = useState("");
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [model, setModel] = useState(MODELS[0].id);
+  const [lang, setLang] = useState(""); // "" = 자동
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -101,7 +102,7 @@ function App() {
       } else {
         setLines([]);
         setBuffer("");
-        await invoke("start_session", { model });
+        await invoke("start_session", { model, lang });
         setRunning(true);
       }
     } catch (e) {
@@ -162,6 +163,14 @@ function App() {
                     {m.label}
                   </option>
                 ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>언어</span>
+              <select value={lang} onChange={(e) => setLang(e.target.value)} disabled={running}>
+                <option value="">자동 감지 (한·영 혼용)</option>
+                <option value="ko">한국어 고정</option>
+                <option value="en">영어 고정</option>
               </select>
             </label>
             <button onClick={toggle} className={running ? "stop" : "start"}>

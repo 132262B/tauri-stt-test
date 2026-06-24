@@ -2,6 +2,7 @@ mod app_state;
 mod capture;
 mod commands;
 mod events;
+mod session;
 
 use app_state::AppState;
 
@@ -24,8 +25,8 @@ pub fn run() {
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             commands::ping,
-            commands::start_capture,
-            commands::stop_capture
+            commands::start_session,
+            commands::stop_session
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

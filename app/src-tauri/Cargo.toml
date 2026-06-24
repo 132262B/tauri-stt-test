@@ -33,4 +33,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 cpal = "0.15"              # 마이크 캡처(데스크톱). iOS 캡처는 P3에서 AVAudioEngine
 rubato = "0.15"            # 16kHz mono 리샘플(anti-alias polyphase/FFT)
+tokio = { version = "1", features = ["sync", "rt"] }  # 세션 채널
+stt-core = { path = "crates/stt-core" }
+stt-asr-sidecar = { path = "crates/stt-asr-sidecar" }
 

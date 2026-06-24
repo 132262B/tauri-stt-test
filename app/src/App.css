@@ -107,6 +107,32 @@ button:active {
   margin: 8px 0 0;
 }
 
+.transcript {
+  font-size: 1.05rem;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  margin: 0;
+}
+
+.committed {
+  color: inherit;
+}
+
+.partial {
+  opacity: 0.45;
+  font-style: italic;
+}
+
+button.start {
+  background: #2e7d32;
+  border-color: #2e7d32;
+}
+
+button.stop {
+  background: #c0392b;
+  border-color: #c0392b;
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     color: #f6f6f6;

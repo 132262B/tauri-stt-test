@@ -1,32 +1,58 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import "./App.css";
 
-// P0: 빈 레이아웃 셸. 좌(전사) / 우(컨트롤·자원 모니터) 2분할.
-// 실제 전사·모니터·컨트롤은 P1 이후 components/ 로 채운다 (docs/02-architecture.md F).
+// P1 커밋9: 마이크 → 사이드카(MLX Whisper) → transcript_update 수신·렌더.
+// 화자 라벨/자원 모니터/백엔드 전환은 P1.5/P2.
+interface TranscriptSnapshot {
+  committedText: string;
+  buffer: string;
+  upto: number;
+}
+
 function App() {
   const [ipc, setIpc] = useState("연결 확인 중…");
-  const [capturing, setCapturing] = useState(false);
-  const [capErr, setCapErr] = useState("");
+  const [running, setRunning] = useState(false);
+  const [err, setErr] = useState("");
+  const [committed, setCommitted] = useState("");
+  const [buffer, setBuffer] = useState("");
+  const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     invoke<string>("ping")
       .then((r) => setIpc(`IPC ${r}`))
       .catch((e) => setIpc(`IPC 오류: ${e}`));
+
+    const un1 = listen<TranscriptSnapshot>("transcript_update", (e) => {
+      setCommitted(e.payload.committedText);
+      setBuffer(e.payload.buffer);
+    });
+    const un2 = listen("transcript_done", () => setBuffer(""));
+    return () => {
+      un1.then((f) => f());
+      un2.then((f) => f());
+    };
   }, []);
 
-  async function toggleCapture() {
-    setCapErr("");
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [committed, buffer]);
+
+  async function toggle() {
+    setErr("");
     try {
-      if (capturing) {
-        await invoke("stop_capture");
-        setCapturing(false);
+      if (running) {
+        await invoke("stop_session");
+        setRunning(false);
       } else {
-        await invoke("start_capture");
-        setCapturing(true);
+        setCommitted("");
+        setBuffer("");
+        await invoke("start_session");
+        setRunning(true);
       }
     } catch (e) {
-      setCapErr(String(e));
+      setErr(String(e));
     }
   }
 
@@ -39,24 +65,33 @@ function App() {
       <main className="app-body">
         <section className="pane transcript-pane">
           <h2>전사</h2>
-          <p className="placeholder">P1에서 실시간 화자 라벨 전사가 여기에 표시됩니다.</p>
+          {!committed && !buffer && (
+            <p className="placeholder">
+              {running ? "듣는 중… 말하면 전사가 나타납니다." : "마이크 캡처를 시작하세요."}
+            </p>
+          )}
+          <p className="transcript">
+            <span className="committed">{committed}</span>
+            {buffer && <span className="partial"> {buffer}</span>}
+          </p>
+          <div ref={bottomRef} />
         </section>
         <aside className="pane control-pane">
           <section className="panel">
             <h2>컨트롤</h2>
-            <button onClick={toggleCapture}>
-              {capturing ? "■ 마이크 정지" : "● 마이크 캡처 시작"}
+            <button onClick={toggle} className={running ? "stop" : "start"}>
+              {running ? "■ 전사 정지" : "● 전사 시작 (마이크)"}
             </button>
             <p className="placeholder">
-              {capturing
-                ? "캡처 중 — 16kHz mono RMS가 dev 콘솔에 출력됩니다."
-                : "백엔드·입력 선택, 전사는 P1 후속 커밋."}
+              {running
+                ? "MLX Whisper(turbo) 온디바이스 전사 중. 첫 시작은 모델 로딩에 수 초."
+                : "백엔드 전환·자원 모니터는 다음 단계(P1.5/P2)."}
             </p>
-            {capErr && <p className="error">{capErr}</p>}
+            {err && <p className="error">{err}</p>}
           </section>
           <section className="panel">
             <h2>자원 모니터</h2>
-            <p className="placeholder">CPU · 메모리 · 지연 · RTF (P1)</p>
+            <p className="placeholder">CPU · 메모리 · 지연 · RTF (P1 후속)</p>
           </section>
         </aside>
       </main>

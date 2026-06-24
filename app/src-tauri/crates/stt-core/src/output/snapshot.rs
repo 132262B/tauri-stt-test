@@ -1,5 +1,14 @@
 use serde::Serialize;
 
+/// 확정 토큰(절대시각). 내보내기(srt/json)·타임스탬프 보존용.
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommittedToken {
+    pub start: f64,
+    pub end: f64,
+    pub text: String,
+}
+
 /// 전사 스냅샷(전체 모드). 화자 라벨·diff/relabel·라인 분할은 P1.5/P2에서 확장.
 #[derive(Clone, Debug, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -10,6 +19,8 @@ pub struct TranscriptSnapshot {
     pub buffer: String,
     /// 처리된 오디오 끝 시각(초).
     pub upto: f64,
+    /// 이번 iter 에 새로 확정된 토큰(누적용 — 내보내기에서 사용).
+    pub new_committed: Vec<CommittedToken>,
 }
 
 /// 자원/성능 스냅샷 (docs/02-architecture.md H). 1초 주기 emit.

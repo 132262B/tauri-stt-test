@@ -2,7 +2,9 @@
 //!
 //! 이후 ModelManager, 선택된 ASR 백엔드 등을 보유한다.
 
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
+
+use stt_core::output::CommittedToken;
 
 use crate::session::SessionHandle;
 
@@ -11,4 +13,6 @@ use crate::session::SessionHandle;
 pub struct AppState {
     /// 실행 중인 전사 세션(P1 커밋9). stop 시 take 하여 정지.
     pub session: Mutex<Option<SessionHandle>>,
+    /// 현재 세션의 확정 토큰 누적(내보내기용, P1 커밋13).
+    pub transcript: Arc<Mutex<Vec<CommittedToken>>>,
 }

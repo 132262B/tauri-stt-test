@@ -23,8 +23,12 @@ impl SessionHandle {
 }
 
 /// 세션을 시작한다(데스크톱). 마이크→사이드카 전사→emit + 자원 모니터.
+/// transcript_log 에 확정 토큰을 누적(내보내기용).
 #[cfg(desktop)]
-pub fn start(app: tauri::AppHandle) -> Result<SessionHandle, String> {
+pub fn start(
+    app: tauri::AppHandle,
+    transcript_log: Arc<std::sync::Mutex<Vec<stt_core::output::CommittedToken>>>,
+) -> Result<SessionHandle, String> {
     use std::path::PathBuf;
     use std::sync::mpsc as std_mpsc;
     use std::time::Duration;
@@ -39,6 +43,11 @@ pub fn start(app: tauri::AppHandle) -> Result<SessionHandle, String> {
     use stt_core::pipeline::{run_session, AudioChunk};
 
     use crate::capture::{mic_cpal, AudioFrame};
+
+    // 새 세션이므로 이전 전사 누적 초기화.
+    if let Ok(mut g) = transcript_log.lock() {
+        g.clear();
+    }
 
     let cfg = AsrConfig::default();
     let model = cfg.model_id.clone();
@@ -78,10 +87,16 @@ pub fn start(app: tauri::AppHandle) -> Result<SessionHandle, String> {
         }
     });
 
-    // 스냅샷 → 프론트 emit
+    // 스냅샷 → 전사 누적 + 프론트 emit
     let app_tx = app.clone();
+    let log_tx = transcript_log.clone();
     tauri::async_runtime::spawn(async move {
         while let Some(snap) = snap_rx.recv().await {
+            if !snap.new_committed.is_empty() {
+                if let Ok(mut g) = log_tx.lock() {
+                    g.extend(snap.new_committed.iter().cloned());
+                }
+            }
             let _ = app_tx.emit("transcript_update", &snap);
         }
         let _ = app_tx.emit("transcript_done", ());

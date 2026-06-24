@@ -2,4 +2,4 @@
 
 mod snapshot;
 
-pub use snapshot::{MetricsSnapshot, TranscriptSnapshot};
+pub use snapshot::{CommittedToken, MetricsSnapshot, TranscriptSnapshot};

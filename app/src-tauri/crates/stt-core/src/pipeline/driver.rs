@@ -2,9 +2,9 @@ use std::time::Instant;
 
 use tokio::sync::mpsc;
 
-use crate::asr::{AsrConfig, AsrError, StreamingAsrBackend};
+use crate::asr::{AsrConfig, AsrError, AsrToken, StreamingAsrBackend};
 use crate::metrics::SessionMetrics;
-use crate::output::TranscriptSnapshot;
+use crate::output::{CommittedToken, TranscriptSnapshot};
 
 const SAMPLE_RATE: usize = 16_000;
 /// 이만큼(샘플) 누적될 때마다 process_iter 1회(≈1초).
@@ -54,6 +54,7 @@ pub async fn run_session(
                     committed_text: committed_text.clone(),
                     buffer: backend.get_buffer(),
                     upto: last_upto,
+                    new_committed: to_committed(&committed),
                 })
                 .await;
         }
@@ -69,7 +70,19 @@ pub async fn run_session(
             committed_text,
             buffer: String::new(),
             upto: last_upto,
+            new_committed: to_committed(&remaining),
         })
         .await;
     Ok(())
+}
+
+fn to_committed(tokens: &[AsrToken]) -> Vec<CommittedToken> {
+    tokens
+        .iter()
+        .map(|t| CommittedToken {
+            start: t.start,
+            end: t.end,
+            text: t.text.clone(),
+        })
+        .collect()
 }

@@ -22,7 +22,7 @@ pub fn start_session(app: tauri::AppHandle, state: State<AppState>) -> Result<()
         if guard.is_some() {
             return Err("이미 세션 진행 중".into());
         }
-        let handle = crate::session::start(app)?;
+        let handle = crate::session::start(app, state.transcript.clone())?;
         *guard = Some(handle);
         Ok(())
     }
@@ -41,4 +41,24 @@ pub fn stop_session(state: State<AppState>) -> Result<(), String> {
         handle.stop();
     }
     Ok(())
+}
+
+/// 현재 세션 전사를 파일로 내보낸다(txt/srt/json). path 는 프론트 저장 대화상자에서.
+#[tauri::command]
+pub fn export_transcript(state: State<AppState>, path: String, format: String) -> Result<String, String> {
+    let tokens = state
+        .transcript
+        .lock()
+        .map_err(|_| "상태 잠금 실패")?
+        .clone();
+    if tokens.is_empty() {
+        return Err("내보낼 전사 내용이 없습니다".into());
+    }
+    let content = match format.as_str() {
+        "srt" => crate::export::to_srt(&tokens),
+        "json" => crate::export::to_json(&tokens),
+        _ => crate::export::to_txt(&tokens),
+    };
+    std::fs::write(&path, content).map_err(|e| format!("저장 실패: {e}"))?;
+    Ok(path)
 }

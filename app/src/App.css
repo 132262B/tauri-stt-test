@@ -153,6 +153,23 @@ button.stop {
   color: #e67e22;
 }
 
+.export-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
+.export-bar button {
+  padding: 4px 10px;
+  font-size: 0.8rem;
+  background: transparent;
+  color: inherit;
+  border: 1px solid #888;
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     color: #f6f6f6;

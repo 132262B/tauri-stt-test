@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { save } from "@tauri-apps/plugin-dialog";
 import "./App.css";
 
 // P1 커밋9: 마이크 → 사이드카(MLX Whisper) → transcript_update 수신·렌더.
@@ -53,6 +54,20 @@ function App() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [committed, buffer]);
 
+  async function exportAs(fmt: "txt" | "srt" | "json") {
+    setErr("");
+    try {
+      const path = await save({
+        defaultPath: `transcript.${fmt}`,
+        filters: [{ name: fmt.toUpperCase(), extensions: [fmt] }],
+      });
+      if (!path) return;
+      await invoke("export_transcript", { path, format: fmt });
+    } catch (e) {
+      setErr(String(e));
+    }
+  }
+
   async function toggle() {
     setErr("");
     try {
@@ -88,6 +103,14 @@ function App() {
             <span className="committed">{committed}</span>
             {buffer && <span className="partial"> {buffer}</span>}
           </p>
+          {committed && (
+            <div className="export-bar">
+              <span>내보내기:</span>
+              <button onClick={() => exportAs("txt")}>txt</button>
+              <button onClick={() => exportAs("srt")}>srt</button>
+              <button onClick={() => exportAs("json")}>json</button>
+            </div>
+          )}
           <div ref={bottomRef} />
         </section>
         <aside className="pane control-pane">

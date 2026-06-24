@@ -14,21 +14,26 @@ pub fn ping() -> &'static str {
 }
 
 /// 전사 세션 시작 — 마이크 캡처 + 사이드카 MLX Whisper 전사. 데스크톱 전용(iOS는 P3).
+/// model: MLX Whisper HF repo id(None=기본 turbo).
 #[tauri::command]
-pub fn start_session(app: tauri::AppHandle, state: State<AppState>) -> Result<(), String> {
+pub fn start_session(
+    app: tauri::AppHandle,
+    state: State<AppState>,
+    model: Option<String>,
+) -> Result<(), String> {
     #[cfg(desktop)]
     {
         let mut guard = state.session.lock().map_err(|_| "상태 잠금 실패")?;
         if guard.is_some() {
             return Err("이미 세션 진행 중".into());
         }
-        let handle = crate::session::start(app, state.transcript.clone())?;
+        let handle = crate::session::start(app, state.transcript.clone(), model)?;
         *guard = Some(handle);
         Ok(())
     }
     #[cfg(not(desktop))]
     {
-        let _ = (app, state);
+        let _ = (app, state, model);
         Err("이 플랫폼의 전사는 아직 미지원(P3)".into())
     }
 }

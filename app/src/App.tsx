@@ -29,6 +29,15 @@ interface Metrics {
   model: string;
 }
 
+// 교체 가능한 MLX Whisper 모델(wlk MLX_MODEL_MAPPING 의 유효 id). 테스트 앱: 속도/메모리 비교용.
+const MODELS: { id: string; label: string }[] = [
+  { id: "mlx-community/whisper-large-v3-turbo", label: "large-v3-turbo (기본·정확)" },
+  { id: "mlx-community/whisper-large-v3-mlx", label: "large-v3 (최고정확·무거움)" },
+  { id: "mlx-community/whisper-small-mlx", label: "small (빠름·가벼움)" },
+  { id: "mlx-community/whisper-base-mlx", label: "base (더 빠름)" },
+  { id: "mlx-community/whisper-tiny-mlx", label: "tiny (가장 빠름·저정확)" },
+];
+
 const SPEAKER_COLORS = ["#2e7d32", "#1565c0", "#c2185b", "#e67e22", "#6a1b9a", "#00838f"];
 function speakerColor(s: number | null): string {
   return s == null ? "#888" : SPEAKER_COLORS[s % SPEAKER_COLORS.length];
@@ -44,6 +53,7 @@ function App() {
   const [lines, setLines] = useState<TranscriptLine[]>([]);
   const [buffer, setBuffer] = useState("");
   const [metrics, setMetrics] = useState<Metrics | null>(null);
+  const [model, setModel] = useState(MODELS[0].id);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -91,7 +101,7 @@ function App() {
       } else {
         setLines([]);
         setBuffer("");
-        await invoke("start_session");
+        await invoke("start_session", { model });
         setRunning(true);
       }
     } catch (e) {
@@ -144,6 +154,16 @@ function App() {
         <aside className="pane control-pane">
           <section className="panel">
             <h2>컨트롤</h2>
+            <label className="field">
+              <span>모델</span>
+              <select value={model} onChange={(e) => setModel(e.target.value)} disabled={running}>
+                {MODELS.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </label>
             <button onClick={toggle} className={running ? "stop" : "start"}>
               {running ? "■ 전사 정지" : "● 전사 시작 (마이크)"}
             </button>

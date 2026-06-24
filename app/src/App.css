@@ -173,6 +173,20 @@ button.stop {
   color: #e67e22;
 }
 
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+  font-size: 0.85rem;
+}
+
+.field select {
+  font: inherit;
+  padding: 6px 8px;
+  border-radius: 6px;
+}
+
 .export-bar {
   display: flex;
   align-items: center;

@@ -1,0 +1,16 @@
+[package]
+name = "stt-asr-sidecar"
+version = "0.1.0"
+edition = "2021"
+description = "StreamingAsrBackend 의 사이드카(Python+MLX) 구현 — 프로세스 spawn + UDS PCM + stdin/stdout NDJSON"
+
+[dependencies]
+stt-core = { path = "../stt-core" }
+stt-sidecar-proto = { path = "../stt-sidecar-proto" }
+async-trait = "0.1"
+serde_json = "1"
+tokio = { version = "1", features = ["process", "net", "io-util", "sync", "rt", "rt-multi-thread", "macros", "time"] }
+
+[dev-dependencies]
+hound = "3"
+tokio = { version = "1", features = ["full"] }

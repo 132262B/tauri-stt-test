@@ -1,0 +1,6 @@
+# 사이드카 직접 의존성 (정확한 핀은 requirements.lock.txt 참고)
+mlx-whisper>=0.4.0
+numpy
+soundfile
+# 빌드(단일 실행파일 번들링)용 — 후속 커밋에서 사용:
+# pyinstaller

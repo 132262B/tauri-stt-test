@@ -21,3 +21,6 @@ venv/
 *.log
 .idea/
 *.swp
+
+# Tooling scratch
+.symposium/

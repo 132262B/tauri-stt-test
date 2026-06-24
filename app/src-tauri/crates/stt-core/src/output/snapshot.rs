@@ -11,3 +11,21 @@ pub struct TranscriptSnapshot {
     /// 처리된 오디오 끝 시각(초).
     pub upto: f64,
 }
+
+/// 자원/성능 스냅샷 (docs/02-architecture.md H). 1초 주기 emit.
+#[derive(Clone, Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MetricsSnapshot {
+    /// 앱+사이드카 합산 CPU 사용률(%).
+    pub cpu_pct: f32,
+    /// 앱 프로세스 RSS(MB).
+    pub rss_mb: f32,
+    /// 사이드카(자식 프로세스) RSS 합산(MB) — MLX 모델 메모리 대부분이 여기.
+    pub sidecar_rss_mb: f32,
+    /// real-time factor (추론시간/오디오길이). <1 이면 실시간 여유.
+    pub rtf: f32,
+    pub latency_ms_p50: f32,
+    pub latency_ms_p95: f32,
+    pub backend: String,
+    pub model: String,
+}

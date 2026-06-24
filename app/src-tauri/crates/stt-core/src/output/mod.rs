@@ -2,4 +2,4 @@
 
 mod snapshot;
 
-pub use snapshot::TranscriptSnapshot;
+pub use snapshot::{MetricsSnapshot, TranscriptSnapshot};

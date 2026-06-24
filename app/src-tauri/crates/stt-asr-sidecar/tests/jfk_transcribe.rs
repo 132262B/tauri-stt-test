@@ -7,6 +7,7 @@ use std::path::PathBuf;
 
 use stt_asr_sidecar::{SidecarBackend, SidecarSpawn};
 use stt_core::asr::AsrConfig;
+use stt_core::metrics::SessionMetrics;
 use stt_core::output::TranscriptSnapshot;
 use stt_core::pipeline::{run_session, AudioChunk};
 use tokio::sync::mpsc;
@@ -37,7 +38,14 @@ async fn jfk_streaming_transcription() {
     let (snap_tx, mut snap_rx) = mpsc::channel::<TranscriptSnapshot>(64);
 
     let session = tokio::spawn(async move {
-        run_session(Box::new(backend), AsrConfig::default(), pcm_rx, snap_tx).await
+        run_session(
+            Box::new(backend),
+            AsrConfig::default(),
+            pcm_rx,
+            snap_tx,
+            SessionMetrics::default(),
+        )
+        .await
     });
 
     // 1초(16000 샘플) 청크 스트리밍

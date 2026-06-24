@@ -133,6 +133,26 @@ button.stop {
   border-color: #c0392b;
 }
 
+.metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.metric {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.9rem;
+}
+
+.metric span {
+  opacity: 0.65;
+}
+
+.metric b.warn {
+  color: #e67e22;
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     color: #f6f6f6;

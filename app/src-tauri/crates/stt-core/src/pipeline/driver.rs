@@ -1,6 +1,9 @@
+use std::time::Instant;
+
 use tokio::sync::mpsc;
 
 use crate::asr::{AsrConfig, AsrError, StreamingAsrBackend};
+use crate::metrics::SessionMetrics;
 use crate::output::TranscriptSnapshot;
 
 const SAMPLE_RATE: usize = 16_000;
@@ -22,6 +25,7 @@ pub async fn run_session(
     cfg: AsrConfig,
     mut pcm_rx: mpsc::Receiver<AudioChunk>,
     snap_tx: mpsc::Sender<TranscriptSnapshot>,
+    metrics: SessionMetrics,
 ) -> Result<(), AsrError> {
     backend.configure(&cfg).await?;
     // 예열 실패는 치명적이지 않음(모델은 configure 에서 적재됨).
@@ -37,8 +41,11 @@ pub async fn run_session(
         backend.insert_audio_chunk(&chunk.samples, chunk.t_end);
 
         if since_iter >= ITER_SAMPLES {
+            let audio_sec = since_iter as f32 / SAMPLE_RATE as f32;
             since_iter = 0;
+            let t0 = Instant::now();
             let committed = backend.process_iter(false).await?;
+            metrics.record_iter(t0.elapsed().as_secs_f32() * 1000.0, audio_sec);
             for t in &committed {
                 committed_text.push_str(&t.text);
             }

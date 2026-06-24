@@ -4,5 +4,6 @@
 //! 출력 `mpsc<TranscriptSnapshot>` 채널로만 접한다 (docs/02-architecture.md A.2).
 
 pub mod asr;
+pub mod metrics;
 pub mod output;
 pub mod pipeline;

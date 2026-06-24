@@ -11,12 +11,24 @@ interface TranscriptSnapshot {
   upto: number;
 }
 
+interface Metrics {
+  cpuPct: number;
+  rssMb: number;
+  sidecarRssMb: number;
+  rtf: number;
+  latencyMsP50: number;
+  latencyMsP95: number;
+  backend: string;
+  model: string;
+}
+
 function App() {
   const [ipc, setIpc] = useState("연결 확인 중…");
   const [running, setRunning] = useState(false);
   const [err, setErr] = useState("");
   const [committed, setCommitted] = useState("");
   const [buffer, setBuffer] = useState("");
+  const [metrics, setMetrics] = useState<Metrics | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -29,9 +41,11 @@ function App() {
       setBuffer(e.payload.buffer);
     });
     const un2 = listen("transcript_done", () => setBuffer(""));
+    const un3 = listen<Metrics>("metrics_update", (e) => setMetrics(e.payload));
     return () => {
       un1.then((f) => f());
       un2.then((f) => f());
+      un3.then((f) => f());
     };
   }, []);
 
@@ -91,7 +105,34 @@ function App() {
           </section>
           <section className="panel">
             <h2>자원 모니터</h2>
-            <p className="placeholder">CPU · 메모리 · 지연 · RTF (P1 후속)</p>
+            {metrics ? (
+              <div className="metrics">
+                <div className="metric">
+                  <span>메모리 (앱)</span>
+                  <b>{metrics.rssMb.toFixed(0)} MB</b>
+                </div>
+                <div className="metric">
+                  <span>메모리 (사이드카/MLX)</span>
+                  <b>{metrics.sidecarRssMb.toFixed(0)} MB</b>
+                </div>
+                <div className="metric">
+                  <span>CPU</span>
+                  <b>{metrics.cpuPct.toFixed(0)} %</b>
+                </div>
+                <div className="metric">
+                  <span>RTF</span>
+                  <b className={metrics.rtf > 1 ? "warn" : ""}>{metrics.rtf.toFixed(2)}</b>
+                </div>
+                <div className="metric">
+                  <span>추론 p50/p95</span>
+                  <b>
+                    {metrics.latencyMsP50.toFixed(0)}/{metrics.latencyMsP95.toFixed(0)} ms
+                  </b>
+                </div>
+              </div>
+            ) : (
+              <p className="placeholder">전사 시작 시 1초마다 갱신됩니다.</p>
+            )}
           </section>
         </aside>
       </main>

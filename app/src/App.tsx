@@ -1,50 +1,41 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
+import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 
+// P0: 빈 레이아웃 셸. 좌(전사) / 우(컨트롤·자원 모니터) 2분할.
+// 실제 전사·모니터·컨트롤은 P1 이후 components/ 로 채운다 (docs/02-architecture.md F).
 function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+  const [ipc, setIpc] = useState("연결 확인 중…");
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
+  useEffect(() => {
+    invoke<string>("ping")
+      .then((r) => setIpc(`IPC ${r}`))
+      .catch((e) => setIpc(`IPC 오류: ${e}`));
+  }, []);
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+    <div className="app">
+      <header className="app-header">
+        <h1>온디바이스 회의 전사</h1>
+        <span className="ipc-status">{ipc}</span>
+      </header>
+      <main className="app-body">
+        <section className="pane transcript-pane">
+          <h2>전사</h2>
+          <p className="placeholder">P1에서 실시간 화자 라벨 전사가 여기에 표시됩니다.</p>
+        </section>
+        <aside className="pane control-pane">
+          <section className="panel">
+            <h2>컨트롤</h2>
+            <p className="placeholder">백엔드·입력 선택, 시작/정지 (P1)</p>
+          </section>
+          <section className="panel">
+            <h2>자원 모니터</h2>
+            <p className="placeholder">CPU · 메모리 · 지연 · RTF (P1)</p>
+          </section>
+        </aside>
+      </main>
+    </div>
   );
 }
 

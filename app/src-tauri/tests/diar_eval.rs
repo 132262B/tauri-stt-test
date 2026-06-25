@@ -38,7 +38,7 @@ async fn diarization_eval() {
         ..AsrConfig::default()
     };
     let diarizer: Option<Box<dyn Diarizer>> =
-        match diar_campplus::OnlineDiarizer::with_download(base.join("models/speaker"), 0.5) {
+        match diar_pyannote::PyannoteDiarizer::with_paths(base.join("models"), None) {
             Ok(d) => Some(Box::new(d)),
             Err(e) => panic!("화자분리 적재 실패: {e}"),
         };

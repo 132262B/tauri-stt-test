@@ -41,7 +41,7 @@ asr-whisper = { path = "crates/asr-whisper" }
 asr-sense = { path = "crates/asr-sense" }
 asr-qwen = { path = "crates/asr-qwen" }
 vad-energy = { path = "crates/vad-energy" }
-diar-campplus = { path = "crates/diar-campplus" }
+diar-pyannote = { path = "crates/diar-pyannote" }
 
 # 모델 전수 벤치(tests/model_sweep.rs)용 — 통합테스트는 dev-deps 만 접근 가능.
 [dev-dependencies]
@@ -49,7 +49,7 @@ asr-core = { path = "crates/asr-core" }
 asr-whisper = { path = "crates/asr-whisper" }
 asr-sense = { path = "crates/asr-sense" }
 asr-qwen = { path = "crates/asr-qwen" }
-diar-campplus = { path = "crates/diar-campplus" }
+diar-pyannote = { path = "crates/diar-pyannote" }
 hound = "3"
 tokio = { version = "1", features = ["full"] }
 

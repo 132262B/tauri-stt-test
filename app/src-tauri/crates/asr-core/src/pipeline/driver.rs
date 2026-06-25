@@ -5,18 +5,14 @@ use std::time::Instant;
 use tokio::sync::mpsc;
 
 use crate::asr::{AsrConfig, AsrError, AsrToken, StreamingAsrBackend};
-use crate::diar::Diarizer;
+use crate::diar::{DiarSegment, Diarizer};
 use crate::metrics::SessionMetrics;
 use crate::output::{CommittedToken, TranscriptLine, TranscriptSnapshot};
 use crate::vad::Vad;
 
 const SAMPLE_RATE: usize = 16_000;
-/// 기본 추론 주기(≈1초). 무거운 모델은 run_session 에서 2초로 늘린다(iter_samples).
 /// 같은 화자라도 이보다 큰 공백이면 라인을 끊는다(초).
-const LINE_GAP_SEC: f64 = 3.0;
-/// 화자 임베딩에 쓰는 컨텍스트 윈도우(초). 확정 배치가 짧아도 끝시각 기준 이만큼을
-/// 잘라 넣어 임베딩을 안정화한다(CAM++ 는 ~2초 미만이면 같은 화자도 다르게 잡힘).
-const DIAR_WINDOW_SEC: f64 = 2.0;
+const LINE_GAP_SEC: f64 = 1.5;
 
 /// 캡처가 공급하는 16kHz mono PCM 청크(절대 끝시각 포함).
 #[derive(Clone, Debug)]
@@ -25,52 +21,46 @@ pub struct AudioChunk {
     pub t_end: f64,
 }
 
-/// 세션 드라이버: PCM 을 백엔드에 공급하고 주기적으로 추론하여 전사 스냅샷을 emit.
+/// 세션 드라이버: PCM 을 백엔드에 공급하고 주기적으로 추론해 전사 스냅샷을 emit.
 ///
-/// 확정 토큰을 화자별 라인으로 묶어 누적한다. pcm_rx 가 닫히면 마지막 flush 후 종료.
+/// 화자분리는 **백그라운드 스레드**에서 누적 오디오 전체를 주기적으로 분석(pyannote, 오프라인)하고,
+/// 메인 루프는 매 emit 시 최신 세그먼트로 토큰을 화자에 매핑한다(전사를 막지 않음).
 pub async fn run_session(
     mut backend: Box<dyn StreamingAsrBackend>,
     cfg: AsrConfig,
     mut pcm_rx: mpsc::Receiver<AudioChunk>,
     snap_tx: mpsc::Sender<TranscriptSnapshot>,
     metrics: SessionMetrics,
-    mut diarizer: Option<Box<dyn Diarizer>>,
+    diarizer: Option<Box<dyn Diarizer>>,
     mut vad: Option<Box<dyn Vad>>,
     reset: Arc<AtomicBool>,
 ) -> Result<(), AsrError> {
     backend.configure(&cfg).await?;
     let _ = backend.warmup().await;
 
-    // 틱 간격(추론 주기): 무거운 모델(turbo/large/qwen)은 전사 1회가 1초를 넘어 매초 추론하면
-    // 실시간을 못 따라간다 → 2초마다 추론해 비용을 분산(약간의 지연 대신 실시간 유지).
     let m = cfg.model_id.to_lowercase();
     let heavy = m.contains("large") || m.contains("turbo") || m.contains("qwen") || m == "sensevoice";
     let iter_samples = if heavy { 2 * SAMPLE_RATE } else { SAMPLE_RATE };
 
+    // 화자분리는 **정지(finalize) 시 1회만** 수행한다. 라이브 중 백그라운드로 돌리면
+    // 8스레드 ONNX 가 CPU 를 점유해 전사까지 느려지고 발열/팬이 심해지므로(코어 경합),
+    // 라이브엔 전사만 돌리고(빠름), 종료 시 누적 오디오 전체를 한 번 분석해 라벨링한다.
+    let has_diar = diarizer.is_some();
+
     let mut committed_text = String::new();
-    let mut lines: Vec<TranscriptLine> = Vec::new();
-    let mut full_audio: Vec<f32> = Vec::new(); // 화자 분리용 절대시각 오디오 보존
+    let mut all_tokens: Vec<AsrToken> = Vec::new();
+    let mut full_audio: Vec<f32> = Vec::new();
+    let segments: Vec<DiarSegment> = Vec::new(); // 라이브 중엔 비어있음(라벨 None)
     let mut since_iter = 0usize;
-    let mut speech_in_window = false; // VAD: 현 윈도우에 음성 있었나
+    let mut speech_in_window = false;
     let mut last_upto = 0.0_f64;
-    let mut last_speaker: Option<u32> = None; // 화자 연속성(짧은 배치는 직전 화자 유지)
 
     while let Some(chunk) = pcm_rx.recv().await {
-        // 초기화 요청: 누적 라인/텍스트/화자 상태를 비우고 빈 스냅샷 전송(전사 중에도 동작).
         if reset.swap(false, Ordering::Relaxed) {
-            lines.clear();
             committed_text.clear();
-            last_speaker = None;
-            let _ = snap_tx
-                .send(TranscriptSnapshot {
-                    committed_text: String::new(),
-                    lines: Vec::new(),
-                    buffer: String::new(),
-                    buffer_speaker: None,
-                    upto: last_upto,
-                    new_committed: Vec::new(),
-                })
-                .await;
+            all_tokens.clear();
+            full_audio.clear();
+            let _ = snap_tx.send(empty_snapshot(last_upto)).await;
         }
         last_upto = chunk.t_end;
         since_iter += chunk.samples.len();
@@ -83,12 +73,11 @@ pub async fn run_session(
             None => speech_in_window = true,
         }
         backend.insert_audio_chunk(&chunk.samples, chunk.t_end);
-        if diarizer.is_some() {
+        if has_diar {
             full_audio.extend_from_slice(&chunk.samples);
         }
 
         if since_iter >= iter_samples {
-            // VAD 게이트: 윈도우 전체가 무음이면 ASR 추론을 건너뜀(연산 절약).
             if !speech_in_window {
                 since_iter = 0;
                 continue;
@@ -97,14 +86,17 @@ pub async fn run_session(
             let audio_sec = since_iter as f32 / SAMPLE_RATE as f32;
             since_iter = 0;
             let t0 = Instant::now();
-            let mut committed = backend.process_iter(false).await?;
+            let committed = backend.process_iter(false).await?;
             metrics.record_iter(t0.elapsed().as_secs_f32() * 1000.0, audio_sec);
-            assign_speakers(&mut diarizer, &full_audio, &mut committed, &mut last_speaker);
-            append_committed(&mut lines, &mut committed_text, &committed);
+            all_tokens.extend(committed.iter().cloned());
+            for t in &committed {
+                committed_text.push_str(&t.text);
+            }
+            let lines = build_lines(&all_tokens, &segments);
             let _ = snap_tx
                 .send(TranscriptSnapshot {
                     committed_text: committed_text.clone(),
-                    lines: lines.clone(),
+                    lines,
                     buffer: backend.get_buffer(),
                     buffer_speaker: None,
                     upto: last_upto,
@@ -114,10 +106,26 @@ pub async fn run_session(
         }
     }
 
-    // 최종 flush
-    let mut remaining = backend.process_iter(true).await?;
-    assign_speakers(&mut diarizer, &full_audio, &mut remaining, &mut last_speaker);
-    append_committed(&mut lines, &mut committed_text, &remaining);
+    // 최종 flush.
+    let remaining = backend.process_iter(true).await?;
+    all_tokens.extend(remaining.iter().cloned());
+    for t in &remaining {
+        committed_text.push_str(&t.text);
+    }
+    // === finalize 화자분리: 종료 시 누적 오디오 전체를 1회 분석(전사 끝나서 CPU 경합 없음). ===
+    let mut segments = segments;
+    if let Some(mut d) = diarizer {
+        let secs = full_audio.len() as f64 / SAMPLE_RATE as f64;
+        let t0 = Instant::now();
+        segments = d.diarize(&full_audio);
+        eprintln!(
+            "[diar] (정지 시) 오디오 {:.0}s → {}세그먼트, {:.0}ms",
+            secs,
+            segments.len(),
+            t0.elapsed().as_secs_f64() * 1000.0
+        );
+    }
+    let lines = build_lines(&all_tokens, &segments);
     let _ = snap_tx
         .send(TranscriptSnapshot {
             committed_text,
@@ -131,64 +139,57 @@ pub async fn run_session(
     Ok(())
 }
 
-/// 확정 토큰 묶음을 화자에 배정(전체 토큰에 동일 화자 부여).
-/// 짧은 배치라도 끝시각 기준 DIAR_WINDOW_SEC 컨텍스트로 임베딩을 안정화하고,
-/// 임베딩 불가(세션 극초반 등) 시 직전 화자를 유지해 라벨이 잘게 튀는 걸 막는다.
-fn assign_speakers(
-    diarizer: &mut Option<Box<dyn Diarizer>>,
-    full_audio: &[f32],
-    tokens: &mut [AsrToken],
-    last_speaker: &mut Option<u32>,
-) {
-    let Some(d) = diarizer.as_mut() else { return };
-    let Some(last) = tokens.last() else { return };
-    let end = ((last.end * SAMPLE_RATE as f64) as usize).min(full_audio.len());
-    let win = (DIAR_WINDOW_SEC * SAMPLE_RATE as f64) as usize;
-    let start = end.saturating_sub(win);
-    let assigned = if end > start {
-        d.assign(&full_audio[start..end])
-    } else {
-        None
-    };
-    // 확정 화자가 나오면 갱신, 아니면 직전 화자 유지(연속성).
-    let spk = assigned.or(*last_speaker);
-    if assigned.is_some() {
-        *last_speaker = assigned;
-    }
-    if let Some(spk) = spk {
-        for t in tokens.iter_mut() {
-            t.speaker = Some(spk);
-        }
+fn empty_snapshot(upto: f64) -> TranscriptSnapshot {
+    TranscriptSnapshot {
+        committed_text: String::new(),
+        lines: Vec::new(),
+        buffer: String::new(),
+        buffer_speaker: None,
+        upto,
+        new_committed: Vec::new(),
     }
 }
 
-/// 확정 토큰 배치를 화자별 라인으로 누적(같은 화자+근접 시각이면 기존 라인 연장).
-fn append_committed(lines: &mut Vec<TranscriptLine>, committed_text: &mut String, batch: &[AsrToken]) {
-    if batch.is_empty() {
-        return;
+/// 토큰의 중간시각이 속한 diar 세그먼트의 화자(겹침 최대). 세그먼트 없으면 None.
+fn speaker_at(segments: &[DiarSegment], start: f64, end: f64) -> Option<u32> {
+    if segments.is_empty() {
+        return None;
     }
-    let spk = batch[0].speaker;
-    let start = batch[0].start;
-    let end = batch[batch.len() - 1].end;
-    let text: String = batch.iter().map(|t| t.text.as_str()).collect();
-    committed_text.push_str(&text);
+    let mid = (start + end) / 2.0;
+    if let Some(s) = segments.iter().find(|s| s.start <= mid && mid <= s.end) {
+        return Some(s.speaker);
+    }
+    segments
+        .iter()
+        .map(|s| (s.speaker, (end.min(s.end) - start.max(s.start)).max(0.0)))
+        .filter(|(_, ov)| *ov > 0.0)
+        .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
+        .map(|(spk, _)| spk)
+}
 
-    let extend = lines
-        .last()
-        .map(|l| l.speaker == spk && (start - l.end) < LINE_GAP_SEC)
-        .unwrap_or(false);
-    if extend {
-        let last = lines.last_mut().unwrap();
-        last.text.push_str(&text);
-        last.end = end;
-    } else {
-        lines.push(TranscriptLine {
-            speaker: spk,
-            text,
-            start,
-            end,
-        });
+/// 전체 토큰 + 최신 diar 세그먼트로 화자별 라인 구성(화자 바뀌거나 공백 크면 분리).
+fn build_lines(tokens: &[AsrToken], segments: &[DiarSegment]) -> Vec<TranscriptLine> {
+    let mut lines: Vec<TranscriptLine> = Vec::new();
+    for t in tokens {
+        let spk = speaker_at(segments, t.start, t.end);
+        let extend = lines
+            .last()
+            .map(|l| l.speaker == spk && (t.start - l.end) < LINE_GAP_SEC)
+            .unwrap_or(false);
+        if extend {
+            let last = lines.last_mut().unwrap();
+            last.text.push_str(&t.text);
+            last.end = t.end;
+        } else {
+            lines.push(TranscriptLine {
+                speaker: spk,
+                text: t.text.clone(),
+                start: t.start,
+                end: t.end,
+            });
+        }
     }
+    lines
 }
 
 fn to_committed(tokens: &[AsrToken]) -> Vec<CommittedToken> {

@@ -1,0 +1,13 @@
+[package]
+name = "diar-pyannote"
+version = "0.1.0"
+edition = "2021"
+description = "화자분리: pyannote-3.0 segmentation + CAM++ 임베딩 + 글로벌 클러스터링(sherpa-onnx). 오프라인·정확. Python 0."
+
+[dependencies]
+asr-core = { path = "../asr-core" }
+sherpa-rs = { version = "0.6", features = ["download-binaries"] }
+sherpa-rs-sys = { version = "0.6", features = ["download-binaries"] }
+
+[dev-dependencies]
+hound = "3"

@@ -129,10 +129,11 @@ pub fn start(
         asr_whisper::self_streaming_backend(crate_dir.join("models/ggml"))
     };
 
-    // 온라인 화자 분리(sherpa-onnx, Rust). diarize=false 면 끔(라인은 시간+텍스트만).
-    // 켜졌을 때만 모델 자동 다운로드. 적재 실패 시 화자 라벨 없이 진행.
+    // 화자 분리(pyannote segmentation + CAM++ + 클러스터링, sherpa-onnx). 종료 시 누적 오디오
+    // 전체를 분석해 화자별 라인 재구성. diarize=false 면 끔(라인은 시간+텍스트만).
     let diarizer: Option<Box<dyn Diarizer>> = if diarize {
-        match diar_campplus::OnlineDiarizer::with_download(crate_dir.join("models/speaker"), 0.5) {
+        // 회의 화자 수를 모르면 None(자동), 알면 Some(n). 우선 자동.
+        match diar_pyannote::PyannoteDiarizer::with_paths(crate_dir.join("models"), None) {
             Ok(d) => Some(Box::new(d)),
             Err(e) => {
                 eprintln!("[session] 화자분리 비활성: {e}");

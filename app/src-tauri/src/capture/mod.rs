@@ -9,6 +9,12 @@ pub mod resample;
 #[cfg(desktop)]
 pub mod mic_cpal;
 
+#[cfg(target_os = "macos")]
+pub mod screencapturekit;
+
+#[cfg(target_os = "macos")]
+pub mod mixer;
+
 /// 캡처 소스에서 나오는 16kHz mono f32 PCM 프레임(절대시각 메타 포함).
 // 필드는 커밋9(파이프라인 연결)에서 소비된다.
 #[allow(dead_code)]

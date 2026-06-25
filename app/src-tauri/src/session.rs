@@ -9,20 +9,22 @@ use std::sync::Arc;
 
 use crate::capture::CaptureControl;
 
-/// 실행 중인 세션 핸들. stop() 시 마이크 정지 + 모니터 task 종료.
+/// 실행 중인 세션 핸들. stop() 시 캡처(들) 정지 + 모니터 task 종료.
 pub struct SessionHandle {
-    capture: CaptureControl,
+    captures: Vec<CaptureControl>,
     stop_flag: Arc<AtomicBool>,
 }
 
 impl SessionHandle {
     pub fn stop(self) {
         self.stop_flag.store(false, Ordering::Relaxed);
-        self.capture.stop();
+        for c in self.captures {
+            c.stop();
+        }
     }
 }
 
-/// 세션을 시작한다(데스크톱). 마이크→사이드카 전사→emit + 자원 모니터.
+/// 세션을 시작한다(데스크톱). 입력(mic/system/both)→전사→emit + 자원 모니터.
 /// transcript_log 에 확정 토큰을 누적(내보내기용).
 #[cfg(desktop)]
 pub fn start(
@@ -30,6 +32,7 @@ pub fn start(
     transcript_log: Arc<std::sync::Mutex<Vec<stt_core::output::CommittedToken>>>,
     model_id: Option<String>,
     lang: Option<String>,
+    input: String,
 ) -> Result<SessionHandle, String> {
     use std::path::PathBuf;
     use std::sync::mpsc as std_mpsc;
@@ -168,10 +171,28 @@ pub fn start(
         }
     });
 
-    // 마이크 시작(브리지로 송신)
-    let capture = mic_cpal::start_mic(af_tx)?;
+    // 입력 소스 시작. mic/system/both. 시스템 오디오는 macOS ScreenCaptureKit(C7).
+    #[cfg(target_os = "macos")]
+    let captures: Vec<CaptureControl> = match input.as_str() {
+        "system" => vec![crate::capture::screencapturekit::start_system(af_tx)?],
+        "both" => {
+            let (mic_tx, mic_rx) = std_mpsc::channel::<AudioFrame>();
+            let (sys_tx, sys_rx) = std_mpsc::channel::<AudioFrame>();
+            let mic_c = mic_cpal::start_mic(mic_tx)?;
+            let sys_c = crate::capture::screencapturekit::start_system(sys_tx)?;
+            crate::capture::mixer::spawn_mixer(mic_rx, sys_rx, af_tx);
+            vec![mic_c, sys_c]
+        }
+        _ => vec![mic_cpal::start_mic(af_tx)?],
+    };
+    #[cfg(not(target_os = "macos"))]
+    let captures: Vec<CaptureControl> = {
+        let _ = &input; // 비-macOS는 마이크만
+        vec![mic_cpal::start_mic(af_tx)?]
+    };
+
     Ok(SessionHandle {
-        capture,
+        captures,
         stop_flag: running,
     })
 }

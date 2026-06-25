@@ -39,3 +39,7 @@ stt-core = { path = "crates/stt-core" }
 stt-asr-whisper = { path = "crates/stt-asr-whisper" }
 stt-diar = { path = "crates/stt-diar" }
 
+# 시스템 오디오 캡처(C7) — macOS ScreenCaptureKit
+[target.'cfg(target_os = "macos")'.dependencies]
+screencapturekit = { version = "8", features = ["macos_13_0"] }
+

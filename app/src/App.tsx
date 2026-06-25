@@ -56,6 +56,7 @@ function App() {
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [model, setModel] = useState(MODELS[0].id);
   const [lang, setLang] = useState(""); // "" = 자동
+  const [input, setInput] = useState("mic"); // mic | system | both
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -103,7 +104,7 @@ function App() {
       } else {
         setLines([]);
         setBuffer("");
-        await invoke("start_session", { model, lang });
+        await invoke("start_session", { model, lang, input });
         setRunning(true);
       }
     } catch (e) {
@@ -174,6 +175,14 @@ function App() {
                 <option value="">자동 감지 (한·영 혼용)</option>
                 <option value="ko">한국어 고정</option>
                 <option value="en">영어 고정</option>
+              </select>
+            </label>
+            <label className="field">
+              <span>입력 소스</span>
+              <select value={input} onChange={(e) => setInput(e.target.value)} disabled={running}>
+                <option value="mic">마이크</option>
+                <option value="system">시스템 오디오 (회의 소리·화면녹화 권한)</option>
+                <option value="both">마이크 + 시스템 오디오</option>
               </select>
             </label>
             <button onClick={toggle} className={running ? "stop" : "start"}>

@@ -38,6 +38,7 @@ sysinfo = "0.33"           # 앱+사이드카 CPU/RSS 측정(자원 모니터)
 stt-core = { path = "crates/stt-core" }
 stt-asr-whisper = { path = "crates/stt-asr-whisper" }
 stt-asr-sense = { path = "crates/stt-asr-sense" }
+stt-asr-qwen = { path = "crates/stt-asr-qwen" }
 stt-diar = { path = "crates/stt-diar" }
 
 # 시스템 오디오 캡처(C7) — macOS ScreenCaptureKit + 권한 체크

@@ -33,6 +33,7 @@ interface Metrics {
 // 전부 Rust 네이티브(whisper.cpp/Metal, in-process). Python/Node 런타임 0.
 const MODELS: { id: string; label: string }[] = [
   { id: "ggml-base", label: "Whisper · base (141M · 권장·빠름)" },
+  { id: "qwen", label: "Qwen3-ASR · 0.6B (한국어 고정확 · Rust 네이티브 · 첫 선택 시 1.7G)" },
   { id: "ggml-small", label: "Whisper · small (466M)" },
   { id: "sensevoice", label: "SenseVoice · 다국어(한·영·일·중)" },
   { id: "ggml-tiny", label: "Whisper · tiny (75M · 가장 빠름)" },

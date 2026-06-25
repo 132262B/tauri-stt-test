@@ -37,6 +37,7 @@ const MODELS: { id: string; label: string }[] = [
   { id: "ggml-small", label: "Whisper · small (244M · 빠름·가벼움)" },
   { id: "ggml-base", label: "Whisper · base (74M · 더 빠름)" },
   { id: "ggml-tiny", label: "Whisper · tiny (39M · 가장 빠름·저정확)" },
+  { id: "sensevoice", label: "SenseVoice · 다국어(한·영·일·중, sherpa-onnx)" },
 ];
 
 const SPEAKER_COLORS = ["#2e7d32", "#1565c0", "#c2185b", "#e67e22", "#6a1b9a", "#00838f"];

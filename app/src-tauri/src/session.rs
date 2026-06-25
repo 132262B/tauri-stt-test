@@ -87,10 +87,14 @@ pub fn start(
         }
     });
 
-    // 전사는 전부 Rust 네이티브(whisper.cpp, in-process). Python/Node 프로세스 없음.
+    // 전사는 전부 Rust 네이티브(in-process). Python/Node 프로세스 없음.
+    // ggml-* = Whisper(whisper.cpp), sensevoice = SenseVoice(sherpa-onnx 다국어).
     let crate_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let backend: Box<dyn StreamingAsrBackend> =
-        Box::new(WhisperStreamingBackend::new(crate_dir.join("models/ggml")));
+    let backend: Box<dyn StreamingAsrBackend> = if model_id == "sensevoice" {
+        stt_asr_sense::streaming_backend(crate_dir.join("models/sense"), cfg.language.clone())?
+    } else {
+        Box::new(WhisperStreamingBackend::new(crate_dir.join("models/ggml")))
+    };
 
     // 온라인 화자 분리(sherpa-onnx, Rust). 모델 자동 다운로드. 실패 시 화자 라벨 없이 진행.
     let diarizer: Option<Box<dyn Diarizer>> =

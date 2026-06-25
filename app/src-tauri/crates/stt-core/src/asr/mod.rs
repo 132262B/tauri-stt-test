@@ -2,8 +2,10 @@
 
 mod backend;
 pub mod policy;
+pub mod self_stream;
 mod token;
 
 pub use backend::{AsrConfig, BackendCaps, StreamingAsrBackend, WhisperLikeBackend};
 pub use policy::OnlineAsrProcessor;
+pub use self_stream::{SelfStreamingBackend, SelfStreamingProcessor};
 pub use token::{AsrError, AsrToken};

@@ -110,6 +110,33 @@ function App() {
     }
   }
 
+  // macOS 권한 확인/요청. 문제 시 안내 문자열 반환, 정상이면 null. 비-macOS는 통과.
+  async function ensurePermissions(): Promise<string | null> {
+    const need = async (check: string, request: string) => {
+      let ok = await invoke<boolean>(`plugin:macos-permissions|${check}`);
+      if (!ok) {
+        await invoke(`plugin:macos-permissions|${request}`);
+        ok = await invoke<boolean>(`plugin:macos-permissions|${check}`);
+      }
+      return ok;
+    };
+    try {
+      if (input === "mic" || input === "both") {
+        if (!(await need("check_microphone_permission", "request_microphone_permission"))) {
+          return "🎤 마이크 권한이 없습니다. 시스템 설정 → 개인정보 보호 및 보안 → 마이크 에서 이 앱을 허용한 뒤 다시 시도하세요.";
+        }
+      }
+      if (input === "system" || input === "both") {
+        if (!(await need("check_screen_recording_permission", "request_screen_recording_permission"))) {
+          return "🖥 화면 녹화(시스템 오디오) 권한이 없습니다. 시스템 설정 → 개인정보 보호 및 보안 → 화면 및 시스템 오디오 녹화 에서 허용 후 앱을 재시작하세요.";
+        }
+      }
+      return null;
+    } catch {
+      return null; // 플러그인 미존재(비-macOS) → 통과
+    }
+  }
+
   async function toggle() {
     setErr("");
     try {
@@ -118,6 +145,11 @@ function App() {
         setRunning(false);
         setLevel(0);
       } else {
+        const permErr = await ensurePermissions();
+        if (permErr) {
+          setErr(permErr);
+          return;
+        }
         setLines([]);
         setBuffer("");
         await invoke("start_session", { model, lang, input, device });

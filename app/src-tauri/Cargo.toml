@@ -40,7 +40,8 @@ stt-asr-whisper = { path = "crates/stt-asr-whisper" }
 stt-asr-sense = { path = "crates/stt-asr-sense" }
 stt-diar = { path = "crates/stt-diar" }
 
-# 시스템 오디오 캡처(C7) — macOS ScreenCaptureKit
+# 시스템 오디오 캡처(C7) — macOS ScreenCaptureKit + 권한 체크
 [target.'cfg(target_os = "macos")'.dependencies]
 screencapturekit = { version = "8", features = ["macos_13_0"] }
+tauri-plugin-macos-permissions = "2"
 

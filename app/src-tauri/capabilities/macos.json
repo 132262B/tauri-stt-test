@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "macos",
+  "description": "macOS 권한 체크/요청 (마이크·화면녹화) — tauri-plugin-macos-permissions",
+  "platforms": ["macOS"],
+  "windows": ["main"],
+  "permissions": ["macos-permissions:default"]
+}

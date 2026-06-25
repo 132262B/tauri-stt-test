@@ -22,6 +22,12 @@ pub fn run() {
         builder = builder.plugin(tauri_plugin_shell::init());
     }
 
+    // macOS 권한(마이크·화면녹화) 체크/요청
+    #[cfg(target_os = "macos")]
+    {
+        builder = builder.plugin(tauri_plugin_macos_permissions::init());
+    }
+
     builder
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![

@@ -124,9 +124,9 @@ pub fn start(
             }
         };
 
-    // VAD 게이트 자리(trait+param 준비). sherpa-rs Silero 는 현재 SIGSEGV 라 보류 —
-    // whisper.cpp 가 무음을 자체 처리하므로 None 으로 진행(docs/03-progress.md).
-    let vad: Option<Box<dyn Vad>> = None;
+    // VAD 게이트: 경량 에너지(RMS) 기반. sherpa Silero 는 SIGSEGV 라 미사용.
+    // 무음 윈도우의 ASR 추론을 건너뛰어 CPU 를 아낀다(오디오는 버퍼에 남아 유실 없음).
+    let vad: Option<Box<dyn Vad>> = Some(Box::new(stt_core::vad::EnergyVad::new(0.006)));
 
     let metrics_for_driver = metrics.clone();
     tauri::async_runtime::spawn(async move {

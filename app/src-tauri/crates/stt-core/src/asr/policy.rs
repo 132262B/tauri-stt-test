@@ -112,6 +112,15 @@ impl<B: WhisperLikeBackend> OnlineAsrProcessor<B> {
 
     pub fn insert_audio_chunk(&mut self, pcm: &[f32]) {
         self.audio_buffer.extend_from_slice(pcm);
+        // 하드 캡: 확정 정체·무음으로 commit 기반 트림이 멈춰도 버퍼가 trimming_sec 를
+        // 넘지 못하게 한다. (이게 없으면 whisper 가 매 반복 점점 긴 구간을 재전사 → CPU 폭주)
+        let max_samples = (self.trimming_sec * SR) as usize;
+        if self.audio_buffer.len() > max_samples {
+            let drop = self.audio_buffer.len() - max_samples;
+            self.audio_buffer.drain(0..drop);
+            self.buffer_time_offset += drop as f64 / SR;
+            self.hyp.pop_committed(self.buffer_time_offset);
+        }
     }
 
     pub fn audio_end_time(&self) -> f64 {
@@ -146,12 +155,15 @@ impl<B: WhisperLikeBackend> OnlineAsrProcessor<B> {
 
         let dur = self.audio_buffer.len() as f64 / SR;
         if dur > self.trimming_sec {
-            if let Some(last) = self.committed.last() {
-                let t = last.end;
-                self.chunk_at(t);
-            } else {
-                self.chunk_at(self.buffer_time_offset + dur / 2.0);
-            }
+            // 버퍼가 trimming_sec 를 넘으면 잘라낸다. 확정 경계를 우선하되,
+            // 확정이 정체돼도 최소한 (끝-trimming_sec) 까지는 잘라 폭주를 막는다.
+            let audio_end = self.buffer_time_offset + dur;
+            let hard_floor = audio_end - self.trimming_sec;
+            let cut_to = match self.committed.last() {
+                Some(last) => last.end.max(hard_floor),
+                None => hard_floor,
+            };
+            self.chunk_at(cut_to);
         }
         Ok(committed)
     }
@@ -194,6 +206,37 @@ mod tests {
             detected_language: None,
             speaker: None,
         }
+    }
+
+    /// 더미 백엔드: 항상 토큰 0개 반환(무음/확정 정체 상황 모사).
+    struct SilentBackend;
+    impl WhisperLikeBackend for SilentBackend {
+        fn transcribe(&self, _audio: &[f32], _prompt: &str) -> Result<Vec<AsrToken>, AsrError> {
+            Ok(Vec::new())
+        }
+        fn sep(&self) -> &str {
+            " "
+        }
+    }
+
+    /// 확정이 전혀 안 되어도(무음) 오디오 버퍼가 trimming_sec 를 넘지 않는지.
+    /// (CPU 폭주 회귀 방지: 캡이 없으면 버퍼가 무한 증가.)
+    #[test]
+    fn audio_buffer_is_capped_when_no_commits() {
+        let trimming = 15.0f32;
+        let mut p = OnlineAsrProcessor::new(SilentBackend, trimming);
+        let max_samples = (trimming as f64 * SR) as usize;
+        // 60초 분량(무음) 주입 — 캡이 없으면 960k 샘플로 증가.
+        let one_sec = vec![0.0f32; SR as usize];
+        for _ in 0..60 {
+            p.insert_audio_chunk(&one_sec);
+            let _ = p.process_iter();
+        }
+        assert!(
+            p.audio_buffer.len() <= max_samples,
+            "버퍼가 캡({max_samples})을 초과: {}",
+            p.audio_buffer.len()
+        );
     }
 
     /// 연속 2회 동일 토큰만 확정되는지(LocalAgreement-2 핵심).

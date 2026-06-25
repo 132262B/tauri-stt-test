@@ -38,7 +38,6 @@ pub fn start(
     use tauri::Emitter;
     use tokio::sync::mpsc;
 
-    use stt_asr_sidecar::{SidecarBackend, SidecarSpawn};
     use stt_asr_whisper::WhisperStreamingBackend;
     use stt_core::asr::{AsrConfig, StreamingAsrBackend};
     use stt_core::metrics::SessionMetrics;
@@ -83,14 +82,10 @@ pub fn start(
         }
     });
 
-    // 백엔드 선택: ggml* = Rust 네이티브 Whisper(whisper.cpp, 사이드카 없음).
-    // 그 외(Voxtral/Qwen) = Python 사이드카(현재 순수 Rust 경로 없음).
-    let sidecar_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("sidecar");
-    let backend: Box<dyn StreamingAsrBackend> = if model_id.starts_with("ggml") {
-        Box::new(WhisperStreamingBackend::new(sidecar_dir.join(".hf-cache/ggml")))
-    } else {
-        Box::new(SidecarBackend::new(SidecarSpawn::dev_venv(sidecar_dir)))
-    };
+    // 전사는 전부 Rust 네이티브(whisper.cpp, in-process). Python/Node 프로세스 없음.
+    let models_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("models/ggml");
+    let backend: Box<dyn StreamingAsrBackend> =
+        Box::new(WhisperStreamingBackend::new(models_dir));
     let metrics_for_driver = metrics.clone();
     tauri::async_runtime::spawn(async move {
         if let Err(e) = run_session(backend, cfg, pcm_rx, snap_tx, metrics_for_driver).await {

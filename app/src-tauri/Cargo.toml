@@ -36,6 +36,5 @@ rubato = "0.15"            # 16kHz mono 리샘플(anti-alias polyphase/FFT)
 tokio = { version = "1", features = ["sync", "rt", "time"] }  # 세션 채널·자원모니터 주기
 sysinfo = "0.33"           # 앱+사이드카 CPU/RSS 측정(자원 모니터)
 stt-core = { path = "crates/stt-core" }
-stt-asr-sidecar = { path = "crates/stt-asr-sidecar" }
 stt-asr-whisper = { path = "crates/stt-asr-whisper" }
 

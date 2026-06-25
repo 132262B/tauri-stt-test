@@ -8,8 +8,8 @@ use stt_asr_whisper::WhisperRsBackend;
 #[test]
 #[ignore = "ggml 모델 필요. --ignored 로 실행"]
 fn jfk_rust_native() {
-    let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../sidecar");
-    let model = base.join(".hf-cache/ggml/ggml-base.bin");
+    let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let model = base.join("models/ggml/ggml-base.bin");
     let wav = base.join("test-data/jfk.wav");
     assert!(model.exists(), "ggml 모델 없음: {model:?}");
     assert!(wav.exists(), "오디오 없음: {wav:?}");

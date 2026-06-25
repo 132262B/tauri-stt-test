@@ -25,11 +25,7 @@ venv/
 # Tooling scratch
 .symposium/
 
-# Sidecar (Python MLX) — venv/모델캐시/테스트오디오/빌드 산출물은 커밋하지 않음
-app/src-tauri/sidecar/.venv/
-app/src-tauri/sidecar/.hf-cache/
-app/src-tauri/sidecar/test-data/
-app/src-tauri/sidecar/build/
-app/src-tauri/sidecar/dist/
-app/src-tauri/binaries/
-*.spec.bak
+# 빌드 도구(cmake venv)·다운로드 모델·테스트 자산은 커밋하지 않음
+app/src-tauri/.cmake-venv/
+app/src-tauri/models/
+app/src-tauri/test-data/

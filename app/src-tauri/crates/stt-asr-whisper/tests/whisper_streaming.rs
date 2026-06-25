@@ -13,8 +13,8 @@ use tokio::sync::mpsc;
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 #[ignore = "ggml 모델 필요. --ignored 로 실행"]
 async fn jfk_rust_native_streaming() {
-    let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../sidecar");
-    let ggml = base.join(".hf-cache/ggml");
+    let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let ggml = base.join("models/ggml");
     let wav = base.join("test-data/jfk.wav");
     let mut reader = hound::WavReader::open(&wav).expect("wav");
     let audio: Vec<f32> = reader

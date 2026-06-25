@@ -77,7 +77,6 @@ dependencies = [
  "rubato",
  "serde",
  "serde_json",
- "stt-asr-sidecar",
  "stt-asr-whisper",
  "stt-core",
  "sysinfo",
@@ -3696,18 +3695,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
 
 [[package]]
-name = "stt-asr-sidecar"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "hound",
- "serde_json",
- "stt-core",
- "stt-sidecar-proto",
- "tokio",
-]
-
-[[package]]
 name = "stt-asr-whisper"
 version = "0.1.0"
 dependencies = [
@@ -3728,14 +3715,6 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.18",
  "tokio",
-]
-
-[[package]]
-name = "stt-sidecar-proto"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
 ]
 
 [[package]]

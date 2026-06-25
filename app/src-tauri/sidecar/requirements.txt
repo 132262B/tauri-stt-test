@@ -1,9 +1,0 @@
-# 사이드카 직접 의존성 (정확한 핀은 requirements.lock.txt 참고)
-mlx-whisper>=0.4.0
-numpy
-soundfile
-resemblyzer        # 온라인 화자 분리(d-vector 임베딩, CPU)
-# 빌드(단일 실행파일 번들링)용 — 후속 커밋에서 사용:
-# pyinstaller
-mlx-voxtral        # Voxtral (Mistral) MLX 백엔드
-qwen3-asr-mlx      # Qwen3-ASR MLX 백엔드

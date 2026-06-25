@@ -29,13 +29,15 @@ interface Metrics {
   model: string;
 }
 
-// 교체 가능한 MLX Whisper 모델(wlk MLX_MODEL_MAPPING 의 유효 id). 테스트 앱: 속도/메모리 비교용.
+// 교체 가능한 ASR 백엔드/모델. 라벨에 엔진명을 명시(테스트 앱: 백엔드별 속도/메모리 비교).
 const MODELS: { id: string; label: string }[] = [
-  { id: "mlx-community/whisper-large-v3-turbo", label: "large-v3-turbo (기본·정확)" },
-  { id: "mlx-community/whisper-large-v3-mlx", label: "large-v3 (최고정확·무거움)" },
-  { id: "mlx-community/whisper-small-mlx", label: "small (빠름·가벼움)" },
-  { id: "mlx-community/whisper-base-mlx", label: "base (더 빠름)" },
-  { id: "mlx-community/whisper-tiny-mlx", label: "tiny (가장 빠름·저정확)" },
+  { id: "mlx-community/whisper-large-v3-turbo", label: "MLX Whisper · large-v3-turbo (기본·정확)" },
+  { id: "mlx-community/whisper-large-v3-mlx", label: "MLX Whisper · large-v3 (최고정확·무거움)" },
+  { id: "mlx-community/whisper-small-mlx", label: "MLX Whisper · small (빠름·가벼움)" },
+  { id: "mlx-community/whisper-base-mlx", label: "MLX Whisper · base (더 빠름)" },
+  { id: "mlx-community/whisper-tiny-mlx", label: "MLX Whisper · tiny (가장 빠름·저정확)" },
+  { id: "mlx-community/Qwen3-ASR-1.7B-bf16", label: "Qwen3-ASR (MLX) · 1.7B (한·영 강함)" },
+  { id: "mistralai/Voxtral-Mini-3B-2507", label: "Voxtral (MLX) · Mini 3B (다국어·무거움)" },
 ];
 
 const SPEAKER_COLORS = ["#2e7d32", "#1565c0", "#c2185b", "#e67e22", "#6a1b9a", "#00838f"];

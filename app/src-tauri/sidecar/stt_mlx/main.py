@@ -14,6 +14,12 @@ import numpy as np
 from .framing import PcmReceiver, log, write_msg
 from .mlx_backend import MLXWhisperBackend
 from .online_asr import OnlineASRProcessor
+from .streaming_backends import (
+    QwenFullBackend,
+    SelfStreamingProcessor,
+    VoxtralFullBackend,
+    pick_backend,
+)
 
 DEFAULT_MODEL = "mlx-community/whisper-large-v3-turbo"
 
@@ -33,8 +39,17 @@ def tokens_to_json(tokens, speaker=None):
 
 class Session:
     def __init__(self, model_path, language, trimming_sec=15.0, diarize=True):
-        self.backend = MLXWhisperBackend(model_path, language)
-        self.proc = OnlineASRProcessor(self.backend, buffer_trimming_sec=trimming_sec)
+        self.kind = pick_backend(model_path)
+        if self.kind == "voxtral":
+            self.backend = VoxtralFullBackend(model_path, language)
+            self.proc = SelfStreamingProcessor(self.backend)
+        elif self.kind == "qwen":
+            self.backend = QwenFullBackend(model_path, language)
+            self.proc = SelfStreamingProcessor(self.backend)
+        else:
+            self.backend = MLXWhisperBackend(model_path, language)
+            self.proc = OnlineASRProcessor(self.backend, buffer_trimming_sec=trimming_sec)
+        log(f"backend={self.kind} model={model_path}")
         self.lock = threading.Lock()
         self.receiver = None
         self.full_audio = np.zeros(0, dtype=np.float32)
@@ -47,6 +62,11 @@ class Session:
                 log("diarizer 활성")
             except Exception as e:  # noqa: BLE001
                 log("diarizer 비활성(임포트 실패):", e)
+
+    def warmup(self):
+        if self.kind == "whisper":
+            self.backend.transcribe(np.zeros(16000, dtype=np.float32))
+        # 자체 스트리밍 백엔드는 모델이 __init__ 에서 적재됨(첫 전사로 워밍)
 
     def attach_uds(self, uds_path):
         self.receiver = PcmReceiver(uds_path, lambda s, _t: self.feed(s))
@@ -129,7 +149,7 @@ def run_protocol():
                                "buffer": "", "upto": 0.0, "is_final": False})
             elif mtype == "warmup":
                 if session:
-                    session.backend.transcribe(np.zeros(16000, dtype=np.float32))
+                    session.warmup()
                     write_msg({"type": "warmed"})
             elif mtype == "finish":
                 if session:

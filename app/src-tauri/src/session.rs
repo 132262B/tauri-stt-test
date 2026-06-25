@@ -34,6 +34,7 @@ pub fn start(
     lang: Option<String>,
     input: String,
     device: Option<String>,
+    diarize: bool,
 ) -> Result<SessionHandle, String> {
     use std::path::PathBuf;
     use std::sync::mpsc as std_mpsc;
@@ -126,15 +127,19 @@ pub fn start(
         Box::new(WhisperStreamingBackend::new(crate_dir.join("models/ggml")))
     };
 
-    // 온라인 화자 분리(sherpa-onnx, Rust). 모델 자동 다운로드. 실패 시 화자 라벨 없이 진행.
-    let diarizer: Option<Box<dyn Diarizer>> =
+    // 온라인 화자 분리(sherpa-onnx, Rust). diarize=false 면 끔(라인은 시간+텍스트만).
+    // 켜졌을 때만 모델 자동 다운로드. 적재 실패 시 화자 라벨 없이 진행.
+    let diarizer: Option<Box<dyn Diarizer>> = if diarize {
         match stt_diar::OnlineDiarizer::with_download(crate_dir.join("models/speaker"), 0.5) {
             Ok(d) => Some(Box::new(d)),
             Err(e) => {
                 eprintln!("[session] 화자분리 비활성: {e}");
                 None
             }
-        };
+        }
+    } else {
+        None
+    };
 
     // VAD 게이트: 경량 에너지(RMS) 기반. sherpa Silero 는 SIGSEGV 라 미사용.
     // 임계값은 "진짜 무음(뮤트/디지털 무음)" 만 스킵하도록 낮게 둔다 — 높이면 작은 마이크의

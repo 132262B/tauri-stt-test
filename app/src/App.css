@@ -134,6 +134,16 @@ button:active {
   color: #888;
 }
 
+.time-chip {
+  flex: 0 0 auto;
+  color: #6b7785;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: nowrap;
+  padding-top: 1px;
+}
+
 .line-text {
   white-space: pre-wrap;
 }
@@ -185,6 +195,17 @@ button.stop {
   font: inherit;
   padding: 6px 8px;
   border-radius: 6px;
+}
+
+.field.checkbox-field {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.field.checkbox-field input {
+  width: 16px;
+  height: 16px;
 }
 
 .soundbar {

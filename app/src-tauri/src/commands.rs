@@ -36,6 +36,7 @@ pub fn start_session(
     lang: Option<String>,
     input: Option<String>,
     device: Option<String>,
+    diarize: Option<bool>,
 ) -> Result<(), String> {
     #[cfg(desktop)]
     {
@@ -47,14 +48,22 @@ pub fn start_session(
         let lang = lang.filter(|s| !s.is_empty());
         let input = input.unwrap_or_else(|| "mic".into());
         let device = device.filter(|s| !s.is_empty());
-        let handle =
-            crate::session::start(app, state.transcript.clone(), model, lang, input, device)?;
+        let diarize = diarize.unwrap_or(true);
+        let handle = crate::session::start(
+            app,
+            state.transcript.clone(),
+            model,
+            lang,
+            input,
+            device,
+            diarize,
+        )?;
         *guard = Some(handle);
         Ok(())
     }
     #[cfg(not(desktop))]
     {
-        let _ = (app, state, model, lang, input, device);
+        let _ = (app, state, model, lang, input, device, diarize);
         Err("이 플랫폼의 전사는 아직 미지원(P3)".into())
     }
 }

@@ -49,6 +49,12 @@ function speakerColor(s: number | null): string {
 function speakerName(s: number | null): string {
   return s == null ? "화자?" : `화자 ${s + 1}`;
 }
+// 초 → m:ss (예: 75.4 → "1:15")
+function fmtTime(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
 
 function App() {
   const [ipc, setIpc] = useState("연결 확인 중…");
@@ -62,6 +68,7 @@ function App() {
   const [input, setInput] = useState("mic"); // mic | system | both
   const [devices, setDevices] = useState<string[]>([]);
   const [device, setDevice] = useState(""); // "" = 기본 장치
+  const [diarize, setDiarize] = useState(true); // 화자 분리 on/off
   const [level, setLevel] = useState(0); // 입력 RMS (0..~0.3)
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -154,7 +161,7 @@ function App() {
         }
         setLines([]);
         setBuffer("");
-        await invoke("start_session", { model, lang, input, device });
+        await invoke("start_session", { model, lang, input, device, diarize });
         setRunning(true);
       }
     } catch (e) {
@@ -186,6 +193,9 @@ function App() {
                     {speakerName(l.speaker)}
                   </span>
                 )}
+                <span className="time-chip">
+                  {fmtTime(l.start)}~{fmtTime(l.end)}
+                </span>
                 <span className="line-text">{l.text}</span>
               </div>
             ))}
@@ -248,6 +258,15 @@ function App() {
                 </select>
               </label>
             )}
+            <label className="field checkbox-field">
+              <input
+                type="checkbox"
+                checked={diarize}
+                onChange={(e) => setDiarize(e.target.checked)}
+                disabled={running}
+              />
+              <span>화자 분리 (끄면 “시간 ~ 시간 · 텍스트”로 표시)</span>
+            </label>
             <button onClick={toggle} className={running ? "stop" : "start"}>
               {running ? "■ 전사 정지" : "● 전사 시작"}
             </button>

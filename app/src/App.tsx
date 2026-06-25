@@ -32,12 +32,12 @@ interface Metrics {
 // 교체 가능한 ASR 백엔드/모델. 라벨에 엔진명을 명시(테스트 앱: 백엔드별 속도/메모리 비교).
 // 전부 Rust 네이티브(whisper.cpp/Metal, in-process). Python/Node 런타임 0.
 const MODELS: { id: string; label: string }[] = [
-  { id: "ggml-base", label: "Whisper · base (74M · 권장·빠름)" },
-  { id: "ggml-small", label: "Whisper · small (244M)" },
+  { id: "ggml-base", label: "Whisper · base (141M · 권장·빠름)" },
+  { id: "ggml-small", label: "Whisper · small (466M)" },
   { id: "sensevoice", label: "SenseVoice · 다국어(한·영·일·중)" },
-  { id: "ggml-tiny", label: "Whisper · tiny (39M · 가장 빠름)" },
-  { id: "ggml-large-v3-turbo", label: "Whisper · turbo (809M · ⚠️ 현재 로드 실패 가능)" },
-  { id: "ggml-large-v3", label: "Whisper · large-v3 (1.55B · ⚠️ 로드 실패 가능)" },
+  { id: "ggml-tiny", label: "Whisper · tiny (75M · 가장 빠름)" },
+  { id: "ggml-large-v3-turbo", label: "Whisper · turbo (1.5G · 고정확·첫 선택 시 다운로드)" },
+  { id: "ggml-large-v3", label: "Whisper · large-v3 (3.1G · 최고정확·첫 선택 시 다운로드)" },
 ];
 
 const SPEAKER_COLORS = ["#2e7d32", "#1565c0", "#c2185b", "#e67e22", "#6a1b9a", "#00838f"];

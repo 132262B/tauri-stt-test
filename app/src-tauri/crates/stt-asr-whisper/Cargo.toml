@@ -6,7 +6,7 @@ description = "Rust 네이티브 Whisper ASR (whisper.cpp via whisper-rs, Metal 
 
 [dependencies]
 stt-core = { path = "../stt-core" }
-whisper-rs = { version = "0.14", features = ["metal"] }
+whisper-rs = { version = "0.16", features = ["metal"] }
 async-trait = "0.1"
 ureq = "2"
 

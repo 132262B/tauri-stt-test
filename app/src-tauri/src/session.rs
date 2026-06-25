@@ -57,7 +57,8 @@ pub fn start(
         g.clear();
     }
 
-    // 기본 = Whisper base(이 whisper.cpp 버전에서 turbo는 컨텍스트 생성 실패가 관측됨).
+    // 기본 = Whisper base(빠르고 작음). turbo/large-v3 도 whisper-rs 0.16 에서 정상 동작
+    // (단, 첫 선택 시 1.5~3.1GB 다운로드). 사용자가 모델을 고르면 그대로 사용.
     let model_id = model_id.unwrap_or_else(|| "ggml-base".to_string());
     let cfg = AsrConfig {
         model_id: model_id.clone(),

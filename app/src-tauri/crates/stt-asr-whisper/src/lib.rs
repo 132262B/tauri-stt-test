@@ -66,20 +66,34 @@ impl WhisperRsBackend {
             .full(params, audio)
             .map_err(|e| format!("전사 실패: {e}"))?;
 
-        let n_segments = state.full_n_segments().map_err(|e| e.to_string())?;
+        // whisper-rs 0.16 객체형 API: get_segment → WhisperSegment → get_token.
+        let n_segments = state.full_n_segments();
         let mut tokens = Vec::new();
         for s in 0..n_segments {
-            let n_tok = state.full_n_tokens(s).map_err(|e| e.to_string())?;
-            for t in 0..n_tok {
-                let text = state
-                    .full_get_token_text(s, t)
-                    .map_err(|e| e.to_string())?;
-                // 특수 토큰([_BEG_], [_TT_...], <|...|>) 제외
-                if text.starts_with("[_") || text.starts_with("<|") {
+            let Some(seg) = state.get_segment(s) else { continue };
+            // 무음/비음성 세그먼트 스킵(무음 구간 가짜 화자 라벨도 함께 제거)
+            if seg.no_speech_probability() > 0.6 {
+                continue;
+            }
+            if let Ok(st) = seg.to_str() {
+                let st = st.trim();
+                if st.is_empty() || st.starts_with('[') || st.starts_with('(') {
                     continue;
                 }
-                let data = state.full_get_token_data(s, t).map_err(|e| e.to_string())?;
-                // t0/t1 은 centisecond(10ms) 단위
+            }
+            let n_tok = seg.n_tokens();
+            for ti in 0..n_tok {
+                let Some(tok) = seg.get_token(ti) else { continue };
+                let text = match tok.to_str() {
+                    Ok(s) => s.to_string(),
+                    Err(_) => continue,
+                };
+                // 특수/주석 토큰 제외([_BEG_], <|..|>, [BLANK_AUDIO] 조각, (..))
+                let tt = text.trim_start();
+                if tt.starts_with("[_") || tt.starts_with("<|") || tt.starts_with('[') || tt.starts_with('(') {
+                    continue;
+                }
+                let data = tok.token_data(); // t0/t1: centisecond(10ms)
                 let start = data.t0 as f64 / 100.0;
                 let end = data.t1 as f64 / 100.0;
                 tokens.push(WhisperToken { start, end, text });
@@ -127,9 +141,22 @@ fn resolve_ggml(dir: &Path, model_id: &str) -> Result<PathBuf, AsrError> {
     let resp = ureq::get(&url)
         .call()
         .map_err(|e| AsrError::ModelMissing(format!("{name} 다운로드 실패: {e}")))?;
+    // 기대 크기(Content-Length): 다운로드가 잘리면 깨진 모델 → whisper.cpp 가
+    // GGML_ASSERT 로 프로세스를 abort 시키므로, 로드 전에 크기로 무결성을 검증한다.
+    let expected: Option<u64> = resp.header("Content-Length").and_then(|v| v.parse().ok());
     let tmp = path.with_extension("part");
     let mut f = std::fs::File::create(&tmp).map_err(|e| AsrError::Inference(e.to_string()))?;
-    std::io::copy(&mut resp.into_reader(), &mut f).map_err(|e| AsrError::Inference(e.to_string()))?;
+    let written = std::io::copy(&mut resp.into_reader(), &mut f)
+        .map_err(|e| AsrError::Inference(e.to_string()))?;
+    drop(f);
+    if let Some(exp) = expected {
+        if written != exp {
+            let _ = std::fs::remove_file(&tmp);
+            return Err(AsrError::ModelMissing(format!(
+                "{name} 다운로드 손상: {written}B 받음(기대 {exp}B). 다시 시도하세요."
+            )));
+        }
+    }
     std::fs::rename(&tmp, &path).map_err(|e| AsrError::Inference(e.to_string()))?;
     Ok(path)
 }

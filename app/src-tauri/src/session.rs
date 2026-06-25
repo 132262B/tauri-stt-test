@@ -40,6 +40,7 @@ pub fn start(
 
     use stt_asr_whisper::WhisperStreamingBackend;
     use stt_core::asr::{AsrConfig, StreamingAsrBackend};
+    use stt_core::diar::Diarizer;
     use stt_core::metrics::SessionMetrics;
     use stt_core::output::{MetricsSnapshot, TranscriptSnapshot};
     use stt_core::pipeline::{run_session, AudioChunk};
@@ -83,12 +84,25 @@ pub fn start(
     });
 
     // 전사는 전부 Rust 네이티브(whisper.cpp, in-process). Python/Node 프로세스 없음.
-    let models_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("models/ggml");
+    let crate_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let backend: Box<dyn StreamingAsrBackend> =
-        Box::new(WhisperStreamingBackend::new(models_dir));
+        Box::new(WhisperStreamingBackend::new(crate_dir.join("models/ggml")));
+
+    // 온라인 화자 분리(sherpa-onnx, Rust). 모델 자동 다운로드. 실패 시 화자 라벨 없이 진행.
+    let diarizer: Option<Box<dyn Diarizer>> =
+        match stt_diar::OnlineDiarizer::with_download(crate_dir.join("models/speaker"), 0.5) {
+            Ok(d) => Some(Box::new(d)),
+            Err(e) => {
+                eprintln!("[session] 화자분리 비활성: {e}");
+                None
+            }
+        };
+
     let metrics_for_driver = metrics.clone();
     tauri::async_runtime::spawn(async move {
-        if let Err(e) = run_session(backend, cfg, pcm_rx, snap_tx, metrics_for_driver).await {
+        if let Err(e) =
+            run_session(backend, cfg, pcm_rx, snap_tx, metrics_for_driver, diarizer).await
+        {
             eprintln!("[session] run_session 오류: {e}");
         }
     });

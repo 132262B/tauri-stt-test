@@ -1,0 +1,15 @@
+[package]
+name = "stt-diar"
+version = "0.1.0"
+edition = "2021"
+description = "Rust 온라인 화자 분리(sherpa-onnx 화자 임베딩 + 클러스터링) — Python resemblyzer 대체"
+
+[dependencies]
+stt-core = { path = "../stt-core" }
+sherpa-rs = { version = "0.6", features = ["download-binaries"] }
+ureq = "2"
+
+[dev-dependencies]
+hound = "3"
+tokio = { version = "1", features = ["full"] }
+stt-asr-whisper = { path = "../stt-asr-whisper" }

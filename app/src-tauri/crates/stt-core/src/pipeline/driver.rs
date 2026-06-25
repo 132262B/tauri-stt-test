@@ -3,6 +3,7 @@ use std::time::Instant;
 use tokio::sync::mpsc;
 
 use crate::asr::{AsrConfig, AsrError, AsrToken, StreamingAsrBackend};
+use crate::diar::Diarizer;
 use crate::metrics::SessionMetrics;
 use crate::output::{CommittedToken, TranscriptLine, TranscriptSnapshot};
 
@@ -28,12 +29,14 @@ pub async fn run_session(
     mut pcm_rx: mpsc::Receiver<AudioChunk>,
     snap_tx: mpsc::Sender<TranscriptSnapshot>,
     metrics: SessionMetrics,
+    mut diarizer: Option<Box<dyn Diarizer>>,
 ) -> Result<(), AsrError> {
     backend.configure(&cfg).await?;
     let _ = backend.warmup().await;
 
     let mut committed_text = String::new();
     let mut lines: Vec<TranscriptLine> = Vec::new();
+    let mut full_audio: Vec<f32> = Vec::new(); // 화자 분리용 절대시각 오디오 보존
     let mut since_iter = 0usize;
     let mut last_upto = 0.0_f64;
 
@@ -41,13 +44,17 @@ pub async fn run_session(
         last_upto = chunk.t_end;
         since_iter += chunk.samples.len();
         backend.insert_audio_chunk(&chunk.samples, chunk.t_end);
+        if diarizer.is_some() {
+            full_audio.extend_from_slice(&chunk.samples);
+        }
 
         if since_iter >= ITER_SAMPLES {
             let audio_sec = since_iter as f32 / SAMPLE_RATE as f32;
             since_iter = 0;
             let t0 = Instant::now();
-            let committed = backend.process_iter(false).await?;
+            let mut committed = backend.process_iter(false).await?;
             metrics.record_iter(t0.elapsed().as_secs_f32() * 1000.0, audio_sec);
+            assign_speakers(&mut diarizer, &full_audio, &mut committed);
             append_committed(&mut lines, &mut committed_text, &committed);
             let _ = snap_tx
                 .send(TranscriptSnapshot {
@@ -63,7 +70,8 @@ pub async fn run_session(
     }
 
     // 최종 flush
-    let remaining = backend.process_iter(true).await?;
+    let mut remaining = backend.process_iter(true).await?;
+    assign_speakers(&mut diarizer, &full_audio, &mut remaining);
     append_committed(&mut lines, &mut committed_text, &remaining);
     let _ = snap_tx
         .send(TranscriptSnapshot {
@@ -76,6 +84,27 @@ pub async fn run_session(
         })
         .await;
     Ok(())
+}
+
+/// 확정 토큰 묶음의 시간 구간 오디오를 화자에 배정(전체 토큰에 동일 화자 부여).
+fn assign_speakers(
+    diarizer: &mut Option<Box<dyn Diarizer>>,
+    full_audio: &[f32],
+    tokens: &mut [AsrToken],
+) {
+    let Some(d) = diarizer.as_mut() else { return };
+    let (Some(first), Some(last)) = (tokens.first(), tokens.last()) else { return };
+    let a = (first.start * SAMPLE_RATE as f64).max(0.0) as usize;
+    let b = (last.end * SAMPLE_RATE as f64) as usize;
+    if b <= a || a >= full_audio.len() {
+        return;
+    }
+    let seg = &full_audio[a..b.min(full_audio.len())];
+    if let Some(spk) = d.assign(seg) {
+        for t in tokens.iter_mut() {
+            t.speaker = Some(spk);
+        }
+    }
 }
 
 /// 확정 토큰 배치를 화자별 라인으로 누적(같은 화자+근접 시각이면 기존 라인 연장).

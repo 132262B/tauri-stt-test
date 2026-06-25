@@ -43,7 +43,15 @@ fn korean_autodetect_not_english() {
 
     // language=None → "auto" 감지 경로.
     let backend = WhisperRsBackend::load(&model, None).expect("load");
+    let _ = backend.transcribe(&audio, ""); // 워밍업
+    let audio_sec = audio.len() as f64 / 16_000.0;
+    let t0 = std::time::Instant::now();
     let tokens = backend.transcribe(&audio, "").expect("transcribe");
+    let ms = t0.elapsed().as_secs_f64() * 1000.0;
+    eprintln!(
+        "=== WHISPER base ko ({audio_sec:.1}s audio): {ms:.0}ms  RTF={:.2}",
+        ms / 1000.0 / audio_sec
+    );
     let text: String = tokens.iter().map(|t| t.text.as_str()).collect();
     eprintln!("=== KO autodetect: {text}");
     let hangul = text.chars().filter(|c| ('\u{AC00}'..='\u{D7A3}').contains(c)).count();

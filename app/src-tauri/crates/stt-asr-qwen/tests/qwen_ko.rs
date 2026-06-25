@@ -23,7 +23,16 @@ fn qwen_transcribes_korean() {
         .collect();
 
     let mut backend = QwenBackend::new(&model_dir, &QWEN_06B, Some("ko".into())).expect("load");
+    // 워밍업 1회 후 측정(순수 추론 시간 = 로드 제외).
+    let _ = backend.transcribe_full(&audio);
+    let audio_sec = audio.len() as f64 / 16_000.0;
+    let t0 = std::time::Instant::now();
     let text = backend.transcribe_full(&audio).expect("transcribe");
+    let ms = t0.elapsed().as_secs_f64() * 1000.0;
+    eprintln!(
+        "=== QWEN3-ASR ko ({audio_sec:.1}s audio): {ms:.0}ms  RTF={:.2}",
+        ms / 1000.0 / audio_sec
+    );
     eprintln!("=== QWEN3-ASR ko: {text}");
     let hangul = text
         .chars()

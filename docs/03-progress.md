@@ -39,16 +39,24 @@ pnpm tauri dev
 ```
 첫 시작은 모델 최초 다운로드. cmake 필요 시 `app/src-tauri/sidecar/.venv/bin` 을 PATH에.
 
-## 알려진 한계 / 다음 작업
+## Seed 항목별 상태 (전부 Rust/Tauri, Python·Node 런타임 0)
 
-- **화자 분리가 Rust 경로엔 미적용**: resemblyzer(Python)라 Voxtral/Qwen(사이드카)에서만 화자 라벨. **Rust 화자분리(ort + onnx 임베딩 + 클러스터링) 포팅**이 다음 핵심(Whisper에도 화자 라벨 부여).
-- **Voxtral/Qwen 순수 Rust 경로 없음**: 현재 Python 사이드카. all-Rust 원하면 후속 연구 필요(mlx-rs/candle).
-- **사이드카 배포 번들**: dev venv python 직접 spawn. 배포는 PyInstaller + 코드서명(미구현).
-- **시스템 오디오(Mac ScreenCaptureKit), iOS** 미착수.
-- **품질 튜닝**: 자동 언어감지 ko↔en 플립(언어 고정으로 완화), 무음 끝 반복 환각.
+| Seed 항목 | 상태 |
+|---|---|
+| 온디바이스/클라우드0 (C1) | ✅ whisper.cpp 로컬, 추론 네트워크 0 |
+| Rust/Tauri, Mac (C2) | ✅ (iOS 미착수) |
+| 실시간 라이브 전사 (C5) | ✅ LocalAgreement Rust |
+| **화자 라벨 전사 (C6)** | ✅ **sherpa-onnx CAM++ 온라인 화자분리(Rust)** — 2화자 구분·재식별 검증 |
+| 화자 등록·식별 (C13) | ⚠️ 클러스터링/재식별은 됨. 사용자 이름 등록 UI는 미구현 |
+| VAD (C4) | ⚠️ whisper.cpp 내부 무음 처리. 명시적 Silero VAD 게이트 미구현 |
+| 한·영 (C10) | ✅ multilingual + 언어 고정 |
+| 자원 모니터 | ✅ | 내보내기(C11) ✅ | 저지연 ✅ |
+| 교체형 백엔드 (C3) | ⚠️ Whisper 5종(Voxtral/Qwen은 Python 필요 → no-Python 규칙으로 제외) |
+| 시스템 오디오 (C7) | ❌ 미착수 (Mac ScreenCaptureKit, 네이티브) |
+| iOS (C2) | ❌ 미착수 (디바이스 필요) |
+| 실패·엣지 (C12) | ⚠️ 부분 |
 
-## 권장 다음 순서
+## 다음 (헤드리스 검증 가능/불가 구분)
 
-1. **Rust 화자분리**(ort + onnx 임베딩) — Whisper 경로에도 화자 라벨.
-2. 시스템 오디오(ScreenCaptureKit) + 믹서.
-3. 사이드카 PyInstaller 번들 + 코드서명(배포).
+- 검증 가능: 명시적 Silero VAD 게이트, 화자 이름 등록.
+- 디바이스/권한 필요(헤드리스 검증 불가): 시스템 오디오(ScreenCaptureKit 권한), iOS(Xcode/실기기).

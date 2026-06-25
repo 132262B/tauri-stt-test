@@ -6,8 +6,8 @@
 use std::path::PathBuf;
 use std::time::Instant;
 
-use stt_asr_qwen::{QwenBackend, QWEN_06B, QWEN_17B};
-use stt_core::asr::SelfStreamingBackend;
+use asr_qwen::{QwenBackend, QWEN_06B, QWEN_17B};
+use asr_core::asr::SelfStreamingBackend;
 
 const SR: usize = 16_000;
 const OUT_DIR: &str = "/private/tmp/claude-501/-Users-kwonjunho-Desktop-work-tauri-stt-test/68e638b0-f4c7-4dbb-ba6f-f5c9ca7534ca/scratchpad/sweep";
@@ -21,7 +21,7 @@ fn qwen_chunked_bench() {
     let audio_sec = audio.len() as f64 / SR as f64;
     std::fs::create_dir_all(OUT_DIR).ok();
 
-    let models: &[(&str, &str, &stt_asr_qwen::QwenModelSpec)] = &[
+    let models: &[(&str, &str, &asr_qwen::QwenModelSpec)] = &[
         ("qwen-0.6b", "models/qwen", &QWEN_06B),
         ("qwen-1.7b", "models/qwen-1.7b", &QWEN_17B),
     ];

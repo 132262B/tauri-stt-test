@@ -6,8 +6,8 @@
 use std::path::PathBuf;
 use std::time::Instant;
 
-use stt_asr_whisper::WhisperRsBackend;
-use stt_core::asr::{AsrConfig, StreamingAsrBackend};
+use asr_whisper::WhisperRsBackend;
+use asr_core::asr::{AsrConfig, StreamingAsrBackend};
 
 const SR: usize = 16_000;
 const OUT_DIR: &str = "/private/tmp/claude-501/-Users-kwonjunho-Desktop-work-tauri-stt-test/68e638b0-f4c7-4dbb-ba6f-f5c9ca7534ca/scratchpad/sweep";
@@ -38,7 +38,7 @@ async fn q5_bench() {
     );
 
     // 2) 스트리밍 레이턴시(90s)
-    let mut sb = stt_asr_whisper::self_streaming_backend(base.join("models/ggml"));
+    let mut sb = asr_whisper::self_streaming_backend(base.join("models/ggml"));
     sb.configure(&AsrConfig {
         model_id: "ggml-large-v3-turbo-q5_0".into(),
         language: Some("ko".into()),

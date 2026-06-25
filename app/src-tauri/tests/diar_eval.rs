@@ -9,11 +9,11 @@ use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
-use stt_core::asr::AsrConfig;
-use stt_core::diar::Diarizer;
-use stt_core::metrics::SessionMetrics;
-use stt_core::output::TranscriptSnapshot;
-use stt_core::pipeline::{run_session, AudioChunk};
+use asr_core::asr::AsrConfig;
+use asr_core::diar::Diarizer;
+use asr_core::metrics::SessionMetrics;
+use asr_core::output::TranscriptSnapshot;
+use asr_core::pipeline::{run_session, AudioChunk};
 use tokio::sync::mpsc;
 
 const SR: usize = 16_000;
@@ -31,14 +31,14 @@ async fn diarization_eval() {
     let audio: Vec<f32> = r.samples::<i16>().map(|s| s.unwrap() as f32 / 32768.0).collect();
     let audio_sec = audio.len() as f64 / SR as f64;
 
-    let backend = stt_asr_whisper::self_streaming_backend(base.join("models/ggml"));
+    let backend = asr_whisper::self_streaming_backend(base.join("models/ggml"));
     let cfg = AsrConfig {
         model_id: "ggml-base".into(),
         language: Some("ko".into()),
         ..AsrConfig::default()
     };
     let diarizer: Option<Box<dyn Diarizer>> =
-        match stt_diar::OnlineDiarizer::with_download(base.join("models/speaker"), 0.5) {
+        match diar_campplus::OnlineDiarizer::with_download(base.join("models/speaker"), 0.5) {
             Ok(d) => Some(Box::new(d)),
             Err(e) => panic!("화자분리 적재 실패: {e}"),
         };

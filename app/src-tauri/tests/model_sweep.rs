@@ -7,10 +7,10 @@
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use stt_asr_qwen::{QwenBackend, QWEN_06B, QWEN_17B};
-use stt_asr_sense::SenseVoiceBackend;
-use stt_asr_whisper::WhisperRsBackend;
-use stt_core::asr::SelfStreamingBackend;
+use asr_qwen::{QwenBackend, QWEN_06B, QWEN_17B};
+use asr_sense::SenseVoiceBackend;
+use asr_whisper::WhisperRsBackend;
+use asr_core::asr::SelfStreamingBackend;
 
 const SR: usize = 16_000;
 const OUT_DIR: &str = "/private/tmp/claude-501/-Users-kwonjunho-Desktop-work-tauri-stt-test/68e638b0-f4c7-4dbb-ba6f-f5c9ca7534ca/scratchpad/sweep";
@@ -188,7 +188,7 @@ fn model_sweep() {
     }
 
     // ---- Qwen3-ASR(0.6B / 1.7B): 풀패스(내부 세그먼트) ----
-    let qwen_models: &[(&str, &str, &str, &stt_asr_qwen::QwenModelSpec)] = &[
+    let qwen_models: &[(&str, &str, &str, &asr_qwen::QwenModelSpec)] = &[
         ("qwen-0.6b", "Qwen3-ASR 0.6B", "models/qwen", &QWEN_06B),
         ("qwen-1.7b", "Qwen3-ASR 1.7B", "models/qwen-1.7b", &QWEN_17B),
     ];

@@ -6,7 +6,7 @@
 use std::path::PathBuf;
 use std::time::Instant;
 
-use stt_core::asr::{AsrConfig, StreamingAsrBackend};
+use asr_core::asr::{AsrConfig, StreamingAsrBackend};
 
 const SR: usize = 16_000;
 
@@ -90,13 +90,13 @@ async fn latency_bench() {
         ("ggml-large-v3-turbo", "ggml-large-v3-turbo"),
         ("ggml-large-v3", "ggml-large-v3"),
     ] {
-        let be = stt_asr_whisper::self_streaming_backend(&ggml);
+        let be = asr_whisper::self_streaming_backend(&ggml);
         if let Some(l) = measure(name, be, &cfg(model), &audio, 90).await {
             out.push(l);
         }
     }
     if base.join("models/sense/model.onnx").exists() {
-        if let Ok(be) = stt_asr_sense::streaming_backend(base.join("models/sense"), Some("ko".into())) {
+        if let Ok(be) = asr_sense::streaming_backend(base.join("models/sense"), Some("ko".into())) {
             if let Some(l) = measure("sensevoice", be, &cfg("sensevoice"), &audio, 90).await {
                 out.push(l);
             }
@@ -104,14 +104,14 @@ async fn latency_bench() {
     }
     // Qwen 은 CPU 라 느림 → 정상상태 수렴에 충분한 짧은 구간으로.
     for (name, dir, spec, sec) in [
-        ("qwen-0.6b", "models/qwen", &stt_asr_qwen::QWEN_06B, 45usize),
-        ("qwen-1.7b", "models/qwen-1.7b", &stt_asr_qwen::QWEN_17B, 30usize),
+        ("qwen-0.6b", "models/qwen", &asr_qwen::QWEN_06B, 45usize),
+        ("qwen-1.7b", "models/qwen-1.7b", &asr_qwen::QWEN_17B, 30usize),
     ] {
         let d = base.join(dir);
         if !d.join("config.json").exists() {
             continue;
         }
-        if let Ok(be) = stt_asr_qwen::streaming_backend(&d, spec, Some("ko".into())) {
+        if let Ok(be) = asr_qwen::streaming_backend(&d, spec, Some("ko".into())) {
             if let Some(l) = measure(name, be, &cfg(name), &audio, sec).await {
                 out.push(l);
             }

@@ -41,6 +41,16 @@ stt-asr-sense = { path = "crates/stt-asr-sense" }
 stt-asr-qwen = { path = "crates/stt-asr-qwen" }
 stt-diar = { path = "crates/stt-diar" }
 
+# 모델 전수 벤치(tests/model_sweep.rs)용 — 통합테스트는 dev-deps 만 접근 가능.
+[dev-dependencies]
+stt-core = { path = "crates/stt-core" }
+stt-asr-whisper = { path = "crates/stt-asr-whisper" }
+stt-asr-sense = { path = "crates/stt-asr-sense" }
+stt-asr-qwen = { path = "crates/stt-asr-qwen" }
+stt-diar = { path = "crates/stt-diar" }
+hound = "3"
+tokio = { version = "1", features = ["full"] }
+
 # 시스템 오디오 캡처(C7) — macOS ScreenCaptureKit + 권한 체크
 [target.'cfg(target_os = "macos")'.dependencies]
 screencapturekit = { version = "8", features = ["macos_13_0"] }

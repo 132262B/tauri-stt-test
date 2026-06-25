@@ -38,6 +38,7 @@ const MODELS: { id: string; label: string }[] = [
   { id: "ggml-small", label: "Whisper · small (466M)" },
   { id: "sensevoice", label: "SenseVoice · 다국어(한·영·일·중)" },
   { id: "ggml-tiny", label: "Whisper · tiny (75M · 가장 빠름)" },
+  { id: "ggml-large-v3-turbo-q5_0", label: "Whisper · turbo Q5_0 (574M · turbo 양자화·고정확·경량)" },
   { id: "ggml-large-v3-turbo", label: "Whisper · turbo (1.5G · 고정확·첫 선택 시 다운로드)" },
   { id: "ggml-large-v3", label: "Whisper · large-v3 (3.1G · 최고정확·첫 선택 시 다운로드)" },
 ];

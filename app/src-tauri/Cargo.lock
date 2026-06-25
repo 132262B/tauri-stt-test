@@ -74,6 +74,7 @@ name = "app"
 version = "0.1.0"
 dependencies = [
  "cpal",
+ "hound",
  "rubato",
  "screencapturekit",
  "serde",

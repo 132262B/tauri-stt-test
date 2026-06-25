@@ -29,3 +29,6 @@ venv/
 app/src-tauri/.cmake-venv/
 app/src-tauri/models/
 app/src-tauri/test-data/
+
+# TTS 회의 음성(미디어)
+*.mp3

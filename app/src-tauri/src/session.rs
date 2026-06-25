@@ -110,8 +110,18 @@ pub fn start(
     let crate_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let backend: Box<dyn StreamingAsrBackend> = if model_id == "sensevoice" {
         stt_asr_sense::streaming_backend(crate_dir.join("models/sense"), cfg.language.clone())?
+    } else if model_id == "qwen-1.7b" || model_id == "qwen3-asr-1.7b" {
+        stt_asr_qwen::streaming_backend(
+            crate_dir.join("models/qwen-1.7b"),
+            &stt_asr_qwen::QWEN_17B,
+            cfg.language.clone(),
+        )?
     } else if model_id == "qwen" || model_id.starts_with("qwen3-asr") {
-        stt_asr_qwen::streaming_backend(crate_dir.join("models/qwen"), cfg.language.clone())?
+        stt_asr_qwen::streaming_backend(
+            crate_dir.join("models/qwen"),
+            &stt_asr_qwen::QWEN_06B,
+            cfg.language.clone(),
+        )?
     } else {
         Box::new(WhisperStreamingBackend::new(crate_dir.join("models/ggml")))
     };

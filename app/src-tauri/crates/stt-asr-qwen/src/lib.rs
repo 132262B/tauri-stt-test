@@ -23,14 +23,37 @@ extern "C" {
     fn free(ptr: *mut c_void); // C 가 malloc 한 문자열 해제용(libc)
 }
 
-/// Qwen3-ASR 모델에 필요한 파일들(HF: Qwen/Qwen3-ASR-0.6B).
-const QWEN_FILES: [&str; 5] = [
-    "config.json",
-    "generation_config.json",
-    "model.safetensors",
-    "vocab.json",
-    "merges.txt",
-];
+/// Qwen3-ASR 모델 변종(HF repo + 필요한 파일 목록). 0.6B 는 단일, 1.7B 는 분할 safetensors.
+pub struct QwenModelSpec {
+    pub repo: &'static str,
+    pub files: &'static [&'static str],
+}
+
+/// Qwen3-ASR-0.6B (~1.7G, 단일 safetensors).
+pub const QWEN_06B: QwenModelSpec = QwenModelSpec {
+    repo: "Qwen/Qwen3-ASR-0.6B",
+    files: &[
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "vocab.json",
+        "merges.txt",
+    ],
+};
+
+/// Qwen3-ASR-1.7B (~4.4G, 분할 safetensors + index).
+pub const QWEN_17B: QwenModelSpec = QwenModelSpec {
+    repo: "Qwen/Qwen3-ASR-1.7B",
+    files: &[
+        "config.json",
+        "generation_config.json",
+        "model.safetensors.index.json",
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors",
+        "vocab.json",
+        "merges.txt",
+    ],
+};
 
 /// ISO 코드 → Qwen 이 기대하는 언어명. 미지원/None 은 자동감지.
 fn lang_name(lang: &str) -> Option<&'static str> {
@@ -51,10 +74,14 @@ pub struct QwenBackend {
 unsafe impl Send for QwenBackend {}
 
 impl QwenBackend {
-    /// model_dir 에 모델 파일이 없으면 HF 에서 다운로드 후 적재. language: None=자동.
-    pub fn new(model_dir: impl AsRef<Path>, language: Option<String>) -> Result<Self, String> {
+    /// model_dir 에 모델 파일이 없으면 spec(HF repo)에서 다운로드 후 적재. language: None=자동.
+    pub fn new(
+        model_dir: impl AsRef<Path>,
+        spec: &QwenModelSpec,
+        language: Option<String>,
+    ) -> Result<Self, String> {
         let dir = model_dir.as_ref();
-        ensure_model(dir)?;
+        ensure_model(dir, spec)?;
         let c_dir = CString::new(dir.to_string_lossy().as_bytes())
             .map_err(|_| "경로 인코딩 실패".to_string())?;
         let ctx = unsafe { qwen_load(c_dir.as_ptr()) };
@@ -117,22 +144,24 @@ impl SelfStreamingBackend for QwenBackend {
 /// 모델 디렉터리로부터 StreamingAsrBackend(SelfStreamingProcessor 래핑)를 만든다.
 pub fn streaming_backend(
     model_dir: impl AsRef<Path>,
+    spec: &QwenModelSpec,
     language: Option<String>,
 ) -> Result<Box<dyn StreamingAsrBackend>, String> {
-    let backend = QwenBackend::new(model_dir, language)?;
+    let backend = QwenBackend::new(model_dir, spec, language)?;
     Ok(Box::new(SelfStreamingProcessor::new(backend)))
 }
 
-/// 필요한 모델 파일이 없으면 HF(Qwen/Qwen3-ASR-0.6B)에서 받아 채운다. 크기 검증 포함.
-fn ensure_model(dir: &Path) -> Result<(), String> {
+/// 필요한 모델 파일이 없으면 spec(HF repo)에서 받아 채운다. 크기 검증 포함.
+fn ensure_model(dir: &Path, spec: &QwenModelSpec) -> Result<(), String> {
     std::fs::create_dir_all(dir).ok();
-    const BASE: &str = "https://huggingface.co/Qwen/Qwen3-ASR-0.6B/resolve/main";
-    for name in QWEN_FILES {
+    let base = format!("https://huggingface.co/{}/resolve/main", spec.repo);
+    for name in spec.files {
+        let name = *name;
         let path = dir.join(name);
         if path.exists() {
             continue;
         }
-        let url = format!("{BASE}/{name}");
+        let url = format!("{base}/{name}");
         let resp = ureq::get(&url)
             .call()
             .map_err(|e| format!("{name} 다운로드 실패: {e}"))?;

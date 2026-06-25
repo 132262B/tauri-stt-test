@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use stt_asr_qwen::QwenBackend;
+use stt_asr_qwen::{QwenBackend, QWEN_06B};
 use stt_core::asr::SelfStreamingBackend;
 
 #[test]
@@ -22,7 +22,7 @@ fn qwen_transcribes_korean() {
         .map(|s| s.unwrap() as f32 / 32768.0)
         .collect();
 
-    let mut backend = QwenBackend::new(&model_dir, Some("ko".into())).expect("load");
+    let mut backend = QwenBackend::new(&model_dir, &QWEN_06B, Some("ko".into())).expect("load");
     let text = backend.transcribe_full(&audio).expect("transcribe");
     eprintln!("=== QWEN3-ASR ko: {text}");
     let hangul = text

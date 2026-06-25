@@ -132,9 +132,11 @@ function App() {
           <div className="transcript">
             {lines.map((l, i) => (
               <div className="line" key={i}>
-                <span className="speaker-badge" style={{ background: speakerColor(l.speaker) }}>
-                  {speakerName(l.speaker)}
-                </span>
+                {l.speaker != null && (
+                  <span className="speaker-badge" style={{ background: speakerColor(l.speaker) }}>
+                    {speakerName(l.speaker)}
+                  </span>
+                )}
                 <span className="line-text">{l.text}</span>
               </div>
             ))}

@@ -32,12 +32,12 @@ interface Metrics {
 // 교체 가능한 ASR 백엔드/모델. 라벨에 엔진명을 명시(테스트 앱: 백엔드별 속도/메모리 비교).
 // 전부 Rust 네이티브(whisper.cpp/Metal, in-process). Python/Node 런타임 0.
 const MODELS: { id: string; label: string }[] = [
-  { id: "ggml-large-v3-turbo", label: "Whisper · turbo (809M · 기본·정확)" },
-  { id: "ggml-large-v3", label: "Whisper · large-v3 (1.55B · 최고정확·무거움)" },
-  { id: "ggml-small", label: "Whisper · small (244M · 빠름·가벼움)" },
-  { id: "ggml-base", label: "Whisper · base (74M · 더 빠름)" },
-  { id: "ggml-tiny", label: "Whisper · tiny (39M · 가장 빠름·저정확)" },
-  { id: "sensevoice", label: "SenseVoice · 다국어(한·영·일·중, sherpa-onnx)" },
+  { id: "ggml-base", label: "Whisper · base (74M · 권장·빠름)" },
+  { id: "ggml-small", label: "Whisper · small (244M)" },
+  { id: "sensevoice", label: "SenseVoice · 다국어(한·영·일·중)" },
+  { id: "ggml-tiny", label: "Whisper · tiny (39M · 가장 빠름)" },
+  { id: "ggml-large-v3-turbo", label: "Whisper · turbo (809M · ⚠️ 현재 로드 실패 가능)" },
+  { id: "ggml-large-v3", label: "Whisper · large-v3 (1.55B · ⚠️ 로드 실패 가능)" },
 ];
 
 const SPEAKER_COLORS = ["#2e7d32", "#1565c0", "#c2185b", "#e67e22", "#6a1b9a", "#00838f"];
@@ -235,7 +235,7 @@ function App() {
             </label>
             {input !== "system" && (
               <label className="field">
-                <span>마이크 장치</span>
+                <span>입력 장치 (마이크 / BlackHole 등 출력캡처)</span>
                 <select value={device} onChange={(e) => setDevice(e.target.value)} disabled={running}>
                   <option value="">기본 장치</option>
                   {devices.map((d) => (
@@ -260,11 +260,9 @@ function App() {
                 );
               })}
             </div>
-            <p className={running ? (level > 0.005 ? "vu-on" : "vu-off") : "placeholder"}>
+            <p className={running ? (level > 0.002 ? "vu-on" : "vu-off") : "placeholder"}>
               {running
-                ? level > 0.005
-                  ? `🎙 입력 감지됨 (레벨 ${(level * 1000).toFixed(0)})`
-                  : "🔇 입력 신호 거의 없음 — 말해보세요. 계속 0이면 마이크 장치/권한 확인"
+                ? `${level > 0.002 ? "🎙 입력 감지" : "🔇 거의 무음"} · 레벨 ${(level * 1000).toFixed(1)} (말하면 올라가야 정상; 계속 1 이하면 마이크 권한/입력 볼륨 확인)`
                 : "전사 시작을 누르면 입력 레벨 막대가 움직입니다."}
             </p>
             {err && <p className="error">{err}</p>}

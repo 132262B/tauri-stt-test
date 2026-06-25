@@ -57,8 +57,8 @@ pub fn start(
         g.clear();
     }
 
-    // 기본은 Rust 네이티브 Whisper(ggml). Voxtral/Qwen 만 Python 사이드카.
-    let model_id = model_id.unwrap_or_else(|| "ggml-large-v3-turbo".to_string());
+    // 기본 = Whisper base(이 whisper.cpp 버전에서 turbo는 컨텍스트 생성 실패가 관측됨).
+    let model_id = model_id.unwrap_or_else(|| "ggml-base".to_string());
     let cfg = AsrConfig {
         model_id: model_id.clone(),
         language: lang,

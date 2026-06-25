@@ -45,3 +45,29 @@ impl Resampler16k {
         out
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 알려진 진폭의 48k 사인파 → 16k 리샘플 후 RMS 가 보존되는지(캡처 경로 감쇠 진단).
+    #[test]
+    fn resample_preserves_amplitude() {
+        let mut r = Resampler16k::new(48_000).expect("resampler");
+        let n = 48_000usize; // 1s @48k
+        let amp = 0.5f32;
+        let input: Vec<f32> = (0..n)
+            .map(|i| amp * (2.0 * std::f32::consts::PI * 440.0 * i as f32 / 48_000.0).sin())
+            .collect();
+        let in_rms = (input.iter().map(|s| s * s).sum::<f32>() / n as f32).sqrt();
+        let out = r.push(&input);
+        assert!(!out.is_empty(), "출력 없음");
+        let out_rms = (out.iter().map(|s| s * s).sum::<f32>() / out.len() as f32).sqrt();
+        eprintln!("in_rms={in_rms:.4} out_rms={out_rms:.4} (n_out={})", out.len());
+        // 사인파 rms ≈ amp/√2 ≈ 0.354. 리샘플 후 ±20% 이내면 감쇠 없음.
+        assert!(
+            (out_rms - in_rms).abs() < in_rms * 0.2,
+            "리샘플러가 진폭을 크게 바꿈: in={in_rms} out={out_rms}"
+        );
+    }
+}

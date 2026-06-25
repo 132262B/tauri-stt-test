@@ -27,9 +27,13 @@ tauri-stt-test/
 
 ## 동작 (현재)
 
-마이크 입력 → cpal 캡처 → 16kHz mono 리샘플 → Python+MLX 사이드카(LocalAgreement-2) →
-화자 라벨 없는 실시간 전사(확정/partial) → 화면 표시 + 자원 모니터(메모리/CPU/RTF) + txt/srt/json 내보내기.
-한국어·영어 모두 전사 검증됨. **인터넷 차단(HF_HUB_OFFLINE)에서도 캐시 모델로 동작.**
+마이크 → cpal 캡처 → 16kHz mono 리샘플 → ASR → 실시간 전사(확정/partial) → 화면 + 자원 모니터 + txt/srt/json 내보내기.
+
+ASR 백엔드(모델 드롭다운에서 선택):
+- **Whisper (`ggml-*`)** — **완전 Rust 네이티브**: `whisper.cpp`(Metal) + Rust LocalAgreement, **Python 0, in-process**. 기본값.
+- **Qwen3-ASR / Voxtral** — Python 사이드카(순수 Rust 온디바이스 구현 부재). 화자 분리(resemblyzer)는 현재 이 경로에서만.
+
+한국어·영어·2화자·오프라인(HF_HUB_OFFLINE) 검증됨. 모든 설치는 프로젝트 내부(venv·모델캐시·cmake), 전역 0.
 
 ## 사전 준비물 (이 맥에는 모두 설치 완료)
 

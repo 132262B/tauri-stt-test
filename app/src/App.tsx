@@ -105,6 +105,17 @@ function App() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [lines, buffer]);
 
+  async function reset() {
+    setErr("");
+    setLines([]);
+    setBuffer("");
+    try {
+      await invoke("clear_transcript");
+    } catch (e) {
+      setErr(String(e));
+    }
+  }
+
   async function exportAs(fmt: "txt" | "srt" | "json") {
     setErr("");
     try {
@@ -267,9 +278,14 @@ function App() {
               />
               <span>화자 분리 (끄면 “시간 ~ 시간 · 텍스트”로 표시)</span>
             </label>
-            <button onClick={toggle} className={running ? "stop" : "start"}>
-              {running ? "■ 전사 정지" : "● 전사 시작"}
-            </button>
+            <div className="btn-row">
+              <button onClick={toggle} className={running ? "stop" : "start"}>
+                {running ? "■ 전사 정지" : "● 전사 시작"}
+              </button>
+              <button onClick={reset} className="reset" title="화면/누적 전사 비우기">
+                ↺ 초기화
+              </button>
+            </div>
 
             <div className="soundbar" title="입력 레벨">
               {Array.from({ length: 24 }).map((_, i) => {

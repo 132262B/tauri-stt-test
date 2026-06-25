@@ -163,6 +163,28 @@ button.stop {
   border-color: #c0392b;
 }
 
+.btn-row {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-row button.start,
+.btn-row button.stop {
+  flex: 1;
+}
+
+button.reset {
+  flex: 0 0 auto;
+  background: transparent;
+  color: #6b7785;
+  border-color: #44505c;
+}
+
+button.reset:hover {
+  color: #fff;
+  border-color: #6b7785;
+}
+
 .metrics {
   display: flex;
   flex-direction: column;

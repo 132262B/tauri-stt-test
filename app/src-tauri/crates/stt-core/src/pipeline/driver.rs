@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Instant;
 
 use tokio::sync::mpsc;
@@ -35,6 +37,7 @@ pub async fn run_session(
     metrics: SessionMetrics,
     mut diarizer: Option<Box<dyn Diarizer>>,
     mut vad: Option<Box<dyn Vad>>,
+    reset: Arc<AtomicBool>,
 ) -> Result<(), AsrError> {
     backend.configure(&cfg).await?;
     let _ = backend.warmup().await;
@@ -48,6 +51,22 @@ pub async fn run_session(
     let mut last_speaker: Option<u32> = None; // 화자 연속성(짧은 배치는 직전 화자 유지)
 
     while let Some(chunk) = pcm_rx.recv().await {
+        // 초기화 요청: 누적 라인/텍스트/화자 상태를 비우고 빈 스냅샷 전송(전사 중에도 동작).
+        if reset.swap(false, Ordering::Relaxed) {
+            lines.clear();
+            committed_text.clear();
+            last_speaker = None;
+            let _ = snap_tx
+                .send(TranscriptSnapshot {
+                    committed_text: String::new(),
+                    lines: Vec::new(),
+                    buffer: String::new(),
+                    buffer_speaker: None,
+                    upto: last_upto,
+                    new_committed: Vec::new(),
+                })
+                .await;
+        }
         last_upto = chunk.t_end;
         since_iter += chunk.samples.len();
         match vad.as_mut() {

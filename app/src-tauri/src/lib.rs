@@ -35,6 +35,7 @@ pub fn run() {
             commands::list_inputs,
             commands::start_session,
             commands::stop_session,
+            commands::clear_transcript,
             commands::export_transcript
         ])
         .run(tauri::generate_context!())

@@ -30,6 +30,7 @@ impl SessionHandle {
 pub fn start(
     app: tauri::AppHandle,
     transcript_log: Arc<std::sync::Mutex<Vec<stt_core::output::CommittedToken>>>,
+    reset: Arc<AtomicBool>,
     model_id: Option<String>,
     lang: Option<String>,
     input: String,
@@ -148,9 +149,19 @@ pub fn start(
     let vad: Option<Box<dyn Vad>> = Some(Box::new(stt_core::vad::EnergyVad::new(0.0015)));
 
     let metrics_for_driver = metrics.clone();
+    let reset_for_driver = reset.clone();
     tauri::async_runtime::spawn(async move {
-        if let Err(e) =
-            run_session(backend, cfg, pcm_rx, snap_tx, metrics_for_driver, diarizer, vad).await
+        if let Err(e) = run_session(
+            backend,
+            cfg,
+            pcm_rx,
+            snap_tx,
+            metrics_for_driver,
+            diarizer,
+            vad,
+            reset_for_driver,
+        )
+        .await
         {
             eprintln!("[session] run_session 오류: {e}");
         }

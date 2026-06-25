@@ -72,9 +72,23 @@ pub fn start(
     let (pcm_tx, pcm_rx) = mpsc::channel::<AudioChunk>(512);
     let (snap_tx, mut snap_rx) = mpsc::channel::<TranscriptSnapshot>(64);
 
-    // 브리지 스레드: AudioFrame → AudioChunk (blocking_send = 백프레셔)
+    // 브리지 스레드: AudioFrame → AudioChunk (blocking_send = 백프레셔).
+    // 입력 레벨(RMS)을 ~10Hz로 audio_level emit — 사용자가 음성 입력을 눈으로 확인.
+    let app_level = app.clone();
     std::thread::spawn(move || {
+        let mut acc = 0f32;
+        let mut cnt = 0usize;
         while let Ok(frame) = af_rx.recv() {
+            for &s in &frame.samples {
+                acc += s * s;
+            }
+            cnt += frame.samples.len();
+            if cnt >= 1600 {
+                let rms = (acc / cnt as f32).sqrt();
+                let _ = app_level.emit("audio_level", rms);
+                acc = 0.0;
+                cnt = 0;
+            }
             if pcm_tx
                 .blocking_send(AudioChunk {
                     samples: frame.samples,
@@ -85,6 +99,8 @@ pub fn start(
                 break;
             }
         }
+        // 종료 시 레벨 0
+        let _ = app_level.emit("audio_level", 0.0_f32);
     });
 
     // 전사는 전부 Rust 네이티브(in-process). Python/Node 프로세스 없음.

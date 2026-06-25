@@ -58,6 +58,7 @@ function App() {
   const [model, setModel] = useState(MODELS[0].id);
   const [lang, setLang] = useState(""); // "" = 자동
   const [input, setInput] = useState("mic"); // mic | system | both
+  const [level, setLevel] = useState(0); // 입력 RMS (0..~0.3)
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -71,10 +72,12 @@ function App() {
     });
     const un2 = listen("transcript_done", () => setBuffer(""));
     const un3 = listen<Metrics>("metrics_update", (e) => setMetrics(e.payload));
+    const un4 = listen<number>("audio_level", (e) => setLevel(e.payload));
     return () => {
       un1.then((f) => f());
       un2.then((f) => f());
       un3.then((f) => f());
+      un4.then((f) => f());
     };
   }, []);
 
@@ -102,6 +105,7 @@ function App() {
       if (running) {
         await invoke("stop_session");
         setRunning(false);
+        setLevel(0);
       } else {
         setLines([]);
         setBuffer("");
@@ -187,12 +191,25 @@ function App() {
               </select>
             </label>
             <button onClick={toggle} className={running ? "stop" : "start"}>
-              {running ? "■ 전사 정지" : "● 전사 시작 (마이크)"}
+              {running ? "■ 전사 정지" : "● 전사 시작"}
             </button>
-            <p className="placeholder">
+
+            <div className="soundbar" title="입력 레벨">
+              {Array.from({ length: 24 }).map((_, i) => {
+                const frac = Math.min(1, Math.sqrt(level) * 2.4);
+                const on = i < Math.round(frac * 24);
+                const color = i < 15 ? "#2e7d32" : i < 21 ? "#e6a700" : "#c0392b";
+                return (
+                  <span key={i} className="seg" style={on ? { background: color } : undefined} />
+                );
+              })}
+            </div>
+            <p className={running ? (level > 0.005 ? "vu-on" : "vu-off") : "placeholder"}>
               {running
-                ? "MLX Whisper(turbo) + 화자분리 온디바이스 전사 중. 첫 시작은 모델 로딩에 수 초."
-                : "백엔드 전환·시스템 오디오는 다음 단계(P2)."}
+                ? level > 0.005
+                  ? `🎙 입력 감지됨 (레벨 ${(level * 1000).toFixed(0)})`
+                  : "🔇 입력 신호 거의 없음 — 말해보세요. 계속 0이면 마이크 장치/권한 확인"
+                : "전사 시작을 누르면 입력 레벨 막대가 움직입니다."}
             </p>
             {err && <p className="error">{err}</p>}
           </section>

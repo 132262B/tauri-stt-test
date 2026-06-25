@@ -187,6 +187,39 @@ button.stop {
   border-radius: 6px;
 }
 
+.soundbar {
+  display: flex;
+  gap: 2px;
+  height: 20px;
+  margin: 10px 0 6px;
+  align-items: stretch;
+}
+
+.seg {
+  flex: 1;
+  background: #cfcfcf;
+  border-radius: 2px;
+  transition: background 0.06s linear;
+}
+
+.vu-on {
+  color: #2e7d32;
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.vu-off {
+  color: #c0392b;
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  .seg {
+    background: #3a3a3a;
+  }
+}
+
 .export-bar {
   display: flex;
   align-items: center;

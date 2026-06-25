@@ -13,6 +13,9 @@ const SAMPLE_RATE: usize = 16_000;
 const ITER_SAMPLES: usize = SAMPLE_RATE;
 /// 같은 화자라도 이보다 큰 공백이면 라인을 끊는다(초).
 const LINE_GAP_SEC: f64 = 3.0;
+/// 화자 임베딩에 쓰는 컨텍스트 윈도우(초). 확정 배치가 짧아도 끝시각 기준 이만큼을
+/// 잘라 넣어 임베딩을 안정화한다(CAM++ 는 ~2초 미만이면 같은 화자도 다르게 잡힘).
+const DIAR_WINDOW_SEC: f64 = 2.0;
 
 /// 캡처가 공급하는 16kHz mono PCM 청크(절대 끝시각 포함).
 #[derive(Clone, Debug)]
@@ -42,6 +45,7 @@ pub async fn run_session(
     let mut since_iter = 0usize;
     let mut speech_in_window = false; // VAD: 현 윈도우에 음성 있었나
     let mut last_upto = 0.0_f64;
+    let mut last_speaker: Option<u32> = None; // 화자 연속성(짧은 배치는 직전 화자 유지)
 
     while let Some(chunk) = pcm_rx.recv().await {
         last_upto = chunk.t_end;
@@ -71,7 +75,7 @@ pub async fn run_session(
             let t0 = Instant::now();
             let mut committed = backend.process_iter(false).await?;
             metrics.record_iter(t0.elapsed().as_secs_f32() * 1000.0, audio_sec);
-            assign_speakers(&mut diarizer, &full_audio, &mut committed);
+            assign_speakers(&mut diarizer, &full_audio, &mut committed, &mut last_speaker);
             append_committed(&mut lines, &mut committed_text, &committed);
             let _ = snap_tx
                 .send(TranscriptSnapshot {
@@ -88,7 +92,7 @@ pub async fn run_session(
 
     // 최종 flush
     let mut remaining = backend.process_iter(true).await?;
-    assign_speakers(&mut diarizer, &full_audio, &mut remaining);
+    assign_speakers(&mut diarizer, &full_audio, &mut remaining, &mut last_speaker);
     append_committed(&mut lines, &mut committed_text, &remaining);
     let _ = snap_tx
         .send(TranscriptSnapshot {
@@ -103,21 +107,31 @@ pub async fn run_session(
     Ok(())
 }
 
-/// 확정 토큰 묶음의 시간 구간 오디오를 화자에 배정(전체 토큰에 동일 화자 부여).
+/// 확정 토큰 묶음을 화자에 배정(전체 토큰에 동일 화자 부여).
+/// 짧은 배치라도 끝시각 기준 DIAR_WINDOW_SEC 컨텍스트로 임베딩을 안정화하고,
+/// 임베딩 불가(세션 극초반 등) 시 직전 화자를 유지해 라벨이 잘게 튀는 걸 막는다.
 fn assign_speakers(
     diarizer: &mut Option<Box<dyn Diarizer>>,
     full_audio: &[f32],
     tokens: &mut [AsrToken],
+    last_speaker: &mut Option<u32>,
 ) {
     let Some(d) = diarizer.as_mut() else { return };
-    let (Some(first), Some(last)) = (tokens.first(), tokens.last()) else { return };
-    let a = (first.start * SAMPLE_RATE as f64).max(0.0) as usize;
-    let b = (last.end * SAMPLE_RATE as f64) as usize;
-    if b <= a || a >= full_audio.len() {
-        return;
+    let Some(last) = tokens.last() else { return };
+    let end = ((last.end * SAMPLE_RATE as f64) as usize).min(full_audio.len());
+    let win = (DIAR_WINDOW_SEC * SAMPLE_RATE as f64) as usize;
+    let start = end.saturating_sub(win);
+    let assigned = if end > start {
+        d.assign(&full_audio[start..end])
+    } else {
+        None
+    };
+    // 확정 화자가 나오면 갱신, 아니면 직전 화자 유지(연속성).
+    let spk = assigned.or(*last_speaker);
+    if assigned.is_some() {
+        *last_speaker = assigned;
     }
-    let seg = &full_audio[a..b.min(full_audio.len())];
-    if let Some(spk) = d.assign(seg) {
+    if let Some(spk) = spk {
         for t in tokens.iter_mut() {
             t.speaker = Some(spk);
         }

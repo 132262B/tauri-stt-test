@@ -125,8 +125,10 @@ pub fn start(
         };
 
     // VAD 게이트: 경량 에너지(RMS) 기반. sherpa Silero 는 SIGSEGV 라 미사용.
-    // 무음 윈도우의 ASR 추론을 건너뛰어 CPU 를 아낀다(오디오는 버퍼에 남아 유실 없음).
-    let vad: Option<Box<dyn Vad>> = Some(Box::new(stt_core::vad::EnergyVad::new(0.006)));
+    // 임계값은 "진짜 무음(뮤트/디지털 무음)" 만 스킵하도록 낮게 둔다 — 높이면 작은 마이크의
+    // 실제 발화를 무음으로 오판해 전사가 늦게 뜬다. CPU 폭주는 버퍼 하드 캡이 막으므로,
+    // VAD 는 즉시성을 해치지 않는 선에서만 절약한다.
+    let vad: Option<Box<dyn Vad>> = Some(Box::new(stt_core::vad::EnergyVad::new(0.0015)));
 
     let metrics_for_driver = metrics.clone();
     tauri::async_runtime::spawn(async move {

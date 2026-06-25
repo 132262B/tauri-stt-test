@@ -51,7 +51,7 @@ pnpm tauri dev
 | VAD (C4) | ⚠️ 게이트 trait·로직은 마련. sherpa-rs Silero가 SIGSEGV라 보류 → whisper.cpp 무음 처리로 대체 |
 | 한·영 (C10) | ✅ multilingual + 언어 고정 |
 | 자원 모니터 | ✅ | 내보내기(C11) ✅ | 저지연 ✅ |
-| 교체형 백엔드 (C3) | ⚠️ Whisper 5종(Voxtral/Qwen은 Python 필요 → no-Python 규칙으로 제외) |
+| 교체형 백엔드 (C3) | ✅ **Whisper 5종 + SenseVoice(다국어, sherpa-onnx)** — 전부 Rust. Voxtral/Qwen은 순수 Rust 구현 부재(mlx-rs/candle 재구현=연구 수준)로 제외 |
 | **시스템 오디오 (C7)** | ✅ 구현(macOS ScreenCaptureKit, Rust). 입력 선택 mic/system/both + 믹서. **컴파일·부팅 검증**, 런타임은 화면녹화 권한 필요(미검증) |
 | iOS (C2) | ❌ 미착수 (디바이스 필요) |
 | 실패·엣지 (C12) | ⚠️ 부분 |

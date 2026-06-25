@@ -1,0 +1,15 @@
+[package]
+name = "asr-qwen"
+version = "0.1.0"
+edition = "2021"
+description = "Qwen3-ASR(0.6B) 순수 Rust 백엔드 — antirez/qwen-asr(C, MIT) in-process FFI. Apple Accelerate, Python 0."
+
+[dependencies]
+asr-core = { path = "../asr-core" }
+ureq = "2"
+
+[build-dependencies]
+cc = "1"
+
+[dev-dependencies]
+hound = "3"

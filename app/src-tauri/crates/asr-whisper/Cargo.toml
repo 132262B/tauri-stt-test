@@ -1,0 +1,15 @@
+[package]
+name = "asr-whisper"
+version = "0.1.0"
+edition = "2021"
+description = "Rust 네이티브 Whisper ASR (whisper.cpp via whisper-rs, Metal 온디바이스) — Python 사이드카 대체"
+
+[dependencies]
+asr-core = { path = "../asr-core" }
+whisper-rs = { version = "0.16", features = ["metal", "coreml"] }
+async-trait = "0.1"
+ureq = "2"
+
+[dev-dependencies]
+hound = "3"
+tokio = { version = "1", features = ["full"] }

@@ -73,17 +73,17 @@ checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 name = "app"
 version = "0.1.0"
 dependencies = [
+ "asr-core",
+ "asr-qwen",
+ "asr-sense",
+ "asr-whisper",
  "cpal",
+ "diar-campplus",
  "hound",
  "rubato",
  "screencapturekit",
  "serde",
  "serde_json",
- "stt-asr-qwen",
- "stt-asr-sense",
- "stt-asr-whisper",
- "stt-core",
- "stt-diar",
  "sysinfo",
  "tauri",
  "tauri-build",
@@ -93,6 +93,7 @@ dependencies = [
  "tauri-plugin-shell",
  "tauri-plugin-store",
  "tokio",
+ "vad-energy",
 ]
 
 [[package]]
@@ -112,6 +113,49 @@ checksum = "4b1c24b280fad9eadf6f2bf560d826392020ac6258b4c88c6dd356ae7a24f4e3"
 dependencies = [
  "doom-fish-utils",
  "libc",
+]
+
+[[package]]
+name = "asr-core"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+]
+
+[[package]]
+name = "asr-qwen"
+version = "0.1.0"
+dependencies = [
+ "asr-core",
+ "cc",
+ "hound",
+ "ureq",
+]
+
+[[package]]
+name = "asr-sense"
+version = "0.1.0"
+dependencies = [
+ "asr-core",
+ "hound",
+ "sherpa-rs",
+ "tokio",
+]
+
+[[package]]
+name = "asr-whisper"
+version = "0.1.0"
+dependencies = [
+ "asr-core",
+ "async-trait",
+ "hound",
+ "tokio",
+ "ureq",
+ "whisper-rs",
 ]
 
 [[package]]
@@ -937,6 +981,18 @@ dependencies = [
  "quote",
  "rustc_version",
  "syn 2.0.118",
+]
+
+[[package]]
+name = "diar-campplus"
+version = "0.1.0"
+dependencies = [
+ "asr-core",
+ "asr-whisper",
+ "hound",
+ "sherpa-rs",
+ "tokio",
+ "ureq",
 ]
 
 [[package]]
@@ -3950,61 +4006,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
 
 [[package]]
-name = "stt-asr-qwen"
-version = "0.1.0"
-dependencies = [
- "cc",
- "hound",
- "stt-core",
- "ureq",
-]
-
-[[package]]
-name = "stt-asr-sense"
-version = "0.1.0"
-dependencies = [
- "hound",
- "sherpa-rs",
- "stt-core",
- "tokio",
-]
-
-[[package]]
-name = "stt-asr-whisper"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "hound",
- "stt-core",
- "tokio",
- "ureq",
- "whisper-rs",
-]
-
-[[package]]
-name = "stt-core"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
- "tokio",
-]
-
-[[package]]
-name = "stt-diar"
-version = "0.1.0"
-dependencies = [
- "hound",
- "sherpa-rs",
- "stt-asr-whisper",
- "stt-core",
- "tokio",
- "ureq",
-]
-
-[[package]]
 name = "subtle"
 version = "2.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5041,6 +5042,13 @@ dependencies = [
  "js-sys",
  "serde_core",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "vad-energy"
+version = "0.1.0"
+dependencies = [
+ "asr-core",
 ]
 
 [[package]]

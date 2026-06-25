@@ -1,0 +1,8 @@
+[package]
+name = "vad-energy"
+version = "0.1.0"
+edition = "2021"
+description = "음성 활동 감지(VAD) 구현 — vad-energy(RMS 임계, 모델 불필요). asr-core 의 Vad trait 구현."
+
+[dependencies]
+asr-core = { path = "../asr-core" }

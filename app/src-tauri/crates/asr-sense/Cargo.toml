@@ -1,0 +1,13 @@
+[package]
+name = "asr-sense"
+version = "0.1.0"
+edition = "2021"
+description = "SenseVoice 다국어 ASR(sherpa-onnx, Rust) — Whisper 외 교체형 백엔드. Python 0."
+
+[dependencies]
+asr-core = { path = "../asr-core" }
+sherpa-rs = { version = "0.6", features = ["download-binaries"] }
+
+[dev-dependencies]
+hound = "3"
+tokio = { version = "1", features = ["full"] }

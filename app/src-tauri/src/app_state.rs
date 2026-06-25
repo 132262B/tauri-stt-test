@@ -5,7 +5,7 @@
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
-use stt_core::output::CommittedToken;
+use asr_core::output::CommittedToken;
 
 use crate::session::SessionHandle;
 

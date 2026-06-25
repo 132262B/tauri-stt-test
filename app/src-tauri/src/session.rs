@@ -1,6 +1,6 @@
 //! 라이브 전사 세션 (docs/02-architecture.md B·H, P1 커밋9·12).
 //!
-//! 마이크 캡처(std mpsc AudioFrame) → 브리지 → stt-core run_session(사이드카 ASR) →
+//! 마이크 캡처(std mpsc AudioFrame) → 브리지 → asr-core run_session(사이드카 ASR) →
 //! TranscriptSnapshot → `transcript_update` emit. 별도 1초 주기 task 가 CPU/RSS(sysinfo)+
 //! RTF/지연을 합쳐 `metrics_update` emit. 정지는 capture.stop()+stop_flag 로 연쇄 종료.
 
@@ -29,7 +29,7 @@ impl SessionHandle {
 #[cfg(desktop)]
 pub fn start(
     app: tauri::AppHandle,
-    transcript_log: Arc<std::sync::Mutex<Vec<stt_core::output::CommittedToken>>>,
+    transcript_log: Arc<std::sync::Mutex<Vec<asr_core::output::CommittedToken>>>,
     reset: Arc<AtomicBool>,
     model_id: Option<String>,
     lang: Option<String>,
@@ -44,12 +44,12 @@ pub fn start(
     use tauri::Emitter;
     use tokio::sync::mpsc;
 
-    use stt_core::asr::{AsrConfig, StreamingAsrBackend};
-    use stt_core::diar::Diarizer;
-    use stt_core::vad::Vad;
-    use stt_core::metrics::SessionMetrics;
-    use stt_core::output::{MetricsSnapshot, TranscriptSnapshot};
-    use stt_core::pipeline::{run_session, AudioChunk};
+    use asr_core::asr::{AsrConfig, StreamingAsrBackend};
+    use asr_core::diar::Diarizer;
+    use asr_core::vad::Vad;
+    use asr_core::metrics::SessionMetrics;
+    use asr_core::output::{MetricsSnapshot, TranscriptSnapshot};
+    use asr_core::pipeline::{run_session, AudioChunk};
 
     use crate::capture::{mic_cpal, AudioFrame};
 
@@ -110,29 +110,29 @@ pub fn start(
     // ggml-* = Whisper(whisper.cpp), sensevoice = SenseVoice(sherpa-onnx 다국어).
     let crate_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let backend: Box<dyn StreamingAsrBackend> = if model_id == "sensevoice" {
-        stt_asr_sense::streaming_backend(crate_dir.join("models/sense"), cfg.language.clone())?
+        asr_sense::streaming_backend(crate_dir.join("models/sense"), cfg.language.clone())?
     } else if model_id == "qwen-1.7b" || model_id == "qwen3-asr-1.7b" {
-        stt_asr_qwen::streaming_backend(
+        asr_qwen::streaming_backend(
             crate_dir.join("models/qwen-1.7b"),
-            &stt_asr_qwen::QWEN_17B,
+            &asr_qwen::QWEN_17B,
             cfg.language.clone(),
         )?
     } else if model_id == "qwen" || model_id.starts_with("qwen3-asr") {
-        stt_asr_qwen::streaming_backend(
+        asr_qwen::streaming_backend(
             crate_dir.join("models/qwen"),
-            &stt_asr_qwen::QWEN_06B,
+            &asr_qwen::QWEN_06B,
             cfg.language.clone(),
         )?
     } else {
         // Whisper 도 SelfStreaming(전체 텍스트 공통접두사 확정)으로 — 한국어에서 토큰
         // 타임스탬프 기반 LocalAgreement 의 조각/중복/어순 뒤섞임을 회피.
-        stt_asr_whisper::self_streaming_backend(crate_dir.join("models/ggml"))
+        asr_whisper::self_streaming_backend(crate_dir.join("models/ggml"))
     };
 
     // 온라인 화자 분리(sherpa-onnx, Rust). diarize=false 면 끔(라인은 시간+텍스트만).
     // 켜졌을 때만 모델 자동 다운로드. 적재 실패 시 화자 라벨 없이 진행.
     let diarizer: Option<Box<dyn Diarizer>> = if diarize {
-        match stt_diar::OnlineDiarizer::with_download(crate_dir.join("models/speaker"), 0.5) {
+        match diar_campplus::OnlineDiarizer::with_download(crate_dir.join("models/speaker"), 0.5) {
             Ok(d) => Some(Box::new(d)),
             Err(e) => {
                 eprintln!("[session] 화자분리 비활성: {e}");
@@ -147,7 +147,7 @@ pub fn start(
     // 임계값은 "진짜 무음(뮤트/디지털 무음)" 만 스킵하도록 낮게 둔다 — 높이면 작은 마이크의
     // 실제 발화를 무음으로 오판해 전사가 늦게 뜬다. CPU 폭주는 버퍼 하드 캡이 막으므로,
     // VAD 는 즉시성을 해치지 않는 선에서만 절약한다.
-    let vad: Option<Box<dyn Vad>> = Some(Box::new(stt_core::vad::EnergyVad::new(0.0015)));
+    let vad: Option<Box<dyn Vad>> = Some(Box::new(vad_energy::EnergyVad::new(0.0015)));
 
     let metrics_for_driver = metrics.clone();
     let reset_for_driver = reset.clone();
@@ -224,9 +224,13 @@ pub fn start(
         }
     });
 
-    // 입력 소스 시작. mic/system/both. 시스템 오디오는 macOS ScreenCaptureKit(C7).
+    // 파일 데모 입력: 마이크/권한 없이 전사가 도는지 앱에서 확인용(번들된 회의 음성).
+    let demo_wav = || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("test-data/meeting.wav");
+
+    // 입력 소스 시작. file/mic/system/both. 시스템 오디오는 macOS ScreenCaptureKit(C7).
     #[cfg(target_os = "macos")]
     let captures: Vec<CaptureControl> = match input.as_str() {
+        "file" => vec![crate::capture::file_src::start_file(af_tx, demo_wav())?],
         "system" => vec![crate::capture::screencapturekit::start_system(af_tx)?],
         "both" => {
             let (mic_tx, mic_rx) = std_mpsc::channel::<AudioFrame>();
@@ -239,9 +243,9 @@ pub fn start(
         _ => vec![mic_cpal::start_mic(af_tx, device.clone())?],
     };
     #[cfg(not(target_os = "macos"))]
-    let captures: Vec<CaptureControl> = {
-        let _ = &input;
-        vec![mic_cpal::start_mic(af_tx, device.clone())?]
+    let captures: Vec<CaptureControl> = match input.as_str() {
+        "file" => vec![crate::capture::file_src::start_file(af_tx, demo_wav())?],
+        _ => vec![mic_cpal::start_mic(af_tx, device.clone())?],
     };
 
     Ok(SessionHandle {

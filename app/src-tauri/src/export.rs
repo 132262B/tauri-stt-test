@@ -1,6 +1,6 @@
 //! 전사 내보내기 포맷터 (txt/srt/json) — docs/02-architecture.md F·seed C11.
 
-use stt_core::output::CommittedToken;
+use asr_core::output::CommittedToken;
 
 const SENTENCE_ENDS: [char; 6] = ['.', '?', '!', '。', '?', '!'];
 

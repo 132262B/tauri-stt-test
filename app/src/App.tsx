@@ -252,12 +252,13 @@ function App() {
             <label className="field">
               <span>입력 소스</span>
               <select value={input} onChange={(e) => setInput(e.target.value)} disabled={running}>
+                <option value="file">🎬 파일 데모 (마이크 없이 회의 음성 전사 테스트)</option>
                 <option value="mic">마이크</option>
                 <option value="system">시스템 오디오 (회의 소리·화면녹화 권한)</option>
                 <option value="both">마이크 + 시스템 오디오</option>
               </select>
             </label>
-            {input !== "system" && (
+            {(input === "mic" || input === "both") && (
               <label className="field">
                 <span>입력 장치 (마이크 / BlackHole 등 출력캡처)</span>
                 <select value={device} onChange={(e) => setDevice(e.target.value)} disabled={running}>

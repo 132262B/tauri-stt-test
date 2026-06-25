@@ -9,6 +9,9 @@ pub mod resample;
 #[cfg(desktop)]
 pub mod mic_cpal;
 
+#[cfg(desktop)]
+pub mod file_src;
+
 #[cfg(target_os = "macos")]
 pub mod screencapturekit;
 

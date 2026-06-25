@@ -39,7 +39,8 @@ pub fn start(
     use tokio::sync::mpsc;
 
     use stt_asr_sidecar::{SidecarBackend, SidecarSpawn};
-    use stt_core::asr::AsrConfig;
+    use stt_asr_whisper::WhisperStreamingBackend;
+    use stt_core::asr::{AsrConfig, StreamingAsrBackend};
     use stt_core::metrics::SessionMetrics;
     use stt_core::output::{MetricsSnapshot, TranscriptSnapshot};
     use stt_core::pipeline::{run_session, AudioChunk};
@@ -51,12 +52,14 @@ pub fn start(
         g.clear();
     }
 
+    // 기본은 Rust 네이티브 Whisper(ggml). Voxtral/Qwen 만 Python 사이드카.
+    let model_id = model_id.unwrap_or_else(|| "ggml-large-v3-turbo".to_string());
     let cfg = AsrConfig {
-        model_id: model_id.unwrap_or_else(|| AsrConfig::default().model_id),
+        model_id: model_id.clone(),
         language: lang,
         ..AsrConfig::default()
     };
-    let model = cfg.model_id.clone();
+    let model = model_id.clone();
     let metrics = SessionMetrics::default();
     let running = Arc::new(AtomicBool::new(true));
 
@@ -80,15 +83,17 @@ pub fn start(
         }
     });
 
-    // 세션 드라이버(사이드카 spawn + LocalAgreement)
+    // 백엔드 선택: ggml* = Rust 네이티브 Whisper(whisper.cpp, 사이드카 없음).
+    // 그 외(Voxtral/Qwen) = Python 사이드카(현재 순수 Rust 경로 없음).
     let sidecar_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("sidecar");
-    let spawn = SidecarSpawn::dev_venv(sidecar_dir);
+    let backend: Box<dyn StreamingAsrBackend> = if model_id.starts_with("ggml") {
+        Box::new(WhisperStreamingBackend::new(sidecar_dir.join(".hf-cache/ggml")))
+    } else {
+        Box::new(SidecarBackend::new(SidecarSpawn::dev_venv(sidecar_dir)))
+    };
     let metrics_for_driver = metrics.clone();
     tauri::async_runtime::spawn(async move {
-        let backend = SidecarBackend::new(spawn);
-        if let Err(e) =
-            run_session(Box::new(backend), cfg, pcm_rx, snap_tx, metrics_for_driver).await
-        {
+        if let Err(e) = run_session(backend, cfg, pcm_rx, snap_tx, metrics_for_driver).await {
             eprintln!("[session] run_session 오류: {e}");
         }
     });

@@ -33,6 +33,17 @@ pub struct BackendCaps {
     pub tokenizer_id: &'static str,
 }
 
+/// LocalAgreement-2 가 감싸는 "1회 추론" 백엔드(Whisper류). 단어/토큰 타임스탬프 제공.
+/// Rust 네이티브 Whisper(whisper.cpp)가 이를 구현한다(docs/02-architecture.md D.3).
+pub trait WhisperLikeBackend: Send {
+    /// 16kHz mono PCM 전체를 전사 → 토큰(버퍼 기준 0-base 시각).
+    fn transcribe(&self, audio: &[f32], init_prompt: &str) -> Result<Vec<AsrToken>, AsrError>;
+    /// 토큰 결합 구분자(whisper 토큰은 선행 공백 포함 → "").
+    fn sep(&self) -> &str {
+        ""
+    }
+}
+
 /// 라이브 스트리밍 ASR 백엔드. 사이드카가 첫 구현, 네이티브(mlx-rs/mlx-swift)가 drop-in.
 #[async_trait]
 pub trait StreamingAsrBackend: Send {

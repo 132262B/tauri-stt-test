@@ -3,8 +3,13 @@
 //! Python 사이드카를 대체한다. 토큰 단위 타임스탬프를 제공하므로 Rust LocalAgreement
 //! (stt-core)의 `WhisperLikeBackend` 로 감싸 스트리밍 확정/partial 을 만든다.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
+use async_trait::async_trait;
+use stt_core::asr::{
+    AsrConfig, AsrError, AsrToken, BackendCaps, OnlineAsrProcessor, StreamingAsrBackend,
+    WhisperLikeBackend,
+};
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
 
 /// 단어/토큰 단위 전사 결과(절대시각 초).
@@ -83,3 +88,116 @@ impl WhisperRsBackend {
         Ok(tokens)
     }
 }
+
+impl WhisperLikeBackend for WhisperRsBackend {
+    fn transcribe(&self, audio: &[f32], init_prompt: &str) -> Result<Vec<AsrToken>, AsrError> {
+        let toks = WhisperRsBackend::transcribe(self, audio, init_prompt)
+            .map_err(AsrError::Inference)?;
+        Ok(toks
+            .into_iter()
+            .map(|t| AsrToken {
+                start: t.start,
+                end: t.end,
+                text: t.text,
+                probability: None,
+                detected_language: None,
+                speaker: None,
+            })
+            .collect())
+    }
+
+    fn sep(&self) -> &str {
+        ""
+    }
+}
+
+/// ggml 모델을 dir 에서 찾고, 없으면 HF(ggerganov/whisper.cpp)에서 다운로드.
+fn resolve_ggml(dir: &Path, model_id: &str) -> Result<PathBuf, AsrError> {
+    std::fs::create_dir_all(dir).ok();
+    let name = if model_id.ends_with(".bin") {
+        model_id.to_string()
+    } else {
+        format!("{model_id}.bin")
+    };
+    let path = dir.join(&name);
+    if path.exists() {
+        return Ok(path);
+    }
+    let url = format!("https://huggingface.co/ggerganov/whisper.cpp/resolve/main/{name}");
+    let resp = ureq::get(&url)
+        .call()
+        .map_err(|e| AsrError::ModelMissing(format!("{name} 다운로드 실패: {e}")))?;
+    let tmp = path.with_extension("part");
+    let mut f = std::fs::File::create(&tmp).map_err(|e| AsrError::Inference(e.to_string()))?;
+    std::io::copy(&mut resp.into_reader(), &mut f).map_err(|e| AsrError::Inference(e.to_string()))?;
+    std::fs::rename(&tmp, &path).map_err(|e| AsrError::Inference(e.to_string()))?;
+    Ok(path)
+}
+
+/// Rust 네이티브 Whisper 스트리밍 백엔드(LocalAgreement 포함). Python 사이드카 불필요.
+pub struct WhisperStreamingBackend {
+    models_dir: PathBuf,
+    language: Option<String>,
+    proc: Option<OnlineAsrProcessor<WhisperRsBackend>>,
+}
+
+impl WhisperStreamingBackend {
+    pub fn new(models_dir: impl Into<PathBuf>) -> Self {
+        Self {
+            models_dir: models_dir.into(),
+            language: None,
+            proc: None,
+        }
+    }
+}
+
+#[async_trait]
+impl StreamingAsrBackend for WhisperStreamingBackend {
+    async fn configure(&mut self, cfg: &AsrConfig) -> Result<(), AsrError> {
+        self.language = cfg.language.clone();
+        let path = resolve_ggml(&self.models_dir, &cfg.model_id)?;
+        let backend = WhisperRsBackend::load(&path, cfg.language.clone()).map_err(AsrError::Inference)?;
+        self.proc = Some(OnlineAsrProcessor::new(backend, cfg.trimming_sec));
+        Ok(())
+    }
+
+    async fn warmup(&mut self) -> Result<(), AsrError> {
+        Ok(())
+    }
+
+    fn insert_audio_chunk(&mut self, pcm: &[f32], _end_time: f64) {
+        if let Some(p) = &mut self.proc {
+            p.insert_audio_chunk(pcm);
+        }
+    }
+
+    async fn process_iter(&mut self, is_last: bool) -> Result<Vec<AsrToken>, AsrError> {
+        let p = self.proc.as_mut().ok_or(AsrError::NotReady)?;
+        if is_last {
+            Ok(p.finish())
+        } else {
+            p.process_iter()
+        }
+    }
+
+    fn get_buffer(&self) -> String {
+        self.proc.as_ref().map(|p| p.get_buffer()).unwrap_or_default()
+    }
+
+    fn set_language(&mut self, lang: Option<String>) {
+        self.language = lang.clone();
+        if let Some(p) = &mut self.proc {
+            p.backend_mut().set_language(lang);
+        }
+    }
+
+    fn caps(&self) -> BackendCaps {
+        BackendCaps {
+            provides_word_timestamps: true,
+            provides_probability: false,
+            self_streaming: false,
+            tokenizer_id: "whisper",
+        }
+    }
+}
+

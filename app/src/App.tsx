@@ -30,14 +30,15 @@ interface Metrics {
 }
 
 // 교체 가능한 ASR 백엔드/모델. 라벨에 엔진명을 명시(테스트 앱: 백엔드별 속도/메모리 비교).
+// Whisper(ggml*) = Rust 네이티브(whisper.cpp/Metal, Python 0). Voxtral/Qwen = Python 사이드카.
 const MODELS: { id: string; label: string }[] = [
-  { id: "mlx-community/whisper-large-v3-turbo", label: "MLX Whisper · turbo (809M · 기본·정확)" },
-  { id: "mlx-community/whisper-large-v3-mlx", label: "MLX Whisper · large-v3 (1.55B · 최고정확·무거움)" },
-  { id: "mlx-community/whisper-small-mlx", label: "MLX Whisper · small (244M · 빠름·가벼움)" },
-  { id: "mlx-community/whisper-base-mlx", label: "MLX Whisper · base (74M · 더 빠름)" },
-  { id: "mlx-community/whisper-tiny-mlx", label: "MLX Whisper · tiny (39M · 가장 빠름·저정확)" },
-  { id: "mlx-community/Qwen3-ASR-1.7B-bf16", label: "Qwen3-ASR (MLX) · 1.7B (한·영 강함)" },
-  { id: "mistralai/Voxtral-Mini-3B-2507", label: "Voxtral Mini (MLX) · 3B (다국어·무거움)" },
+  { id: "ggml-large-v3-turbo", label: "Whisper [Rust·whisper.cpp] · turbo (809M · 기본)" },
+  { id: "ggml-large-v3", label: "Whisper [Rust·whisper.cpp] · large-v3 (1.55B · 최고정확)" },
+  { id: "ggml-small", label: "Whisper [Rust·whisper.cpp] · small (244M · 빠름)" },
+  { id: "ggml-base", label: "Whisper [Rust·whisper.cpp] · base (74M · 더 빠름)" },
+  { id: "ggml-tiny", label: "Whisper [Rust·whisper.cpp] · tiny (39M · 가장 빠름)" },
+  { id: "mlx-community/Qwen3-ASR-1.7B-bf16", label: "Qwen3-ASR [Python 사이드카·MLX] · 1.7B (한·영)" },
+  { id: "mistralai/Voxtral-Mini-3B-2507", label: "Voxtral Mini [Python 사이드카·MLX] · 3B (다국어)" },
 ];
 
 const SPEAKER_COLORS = ["#2e7d32", "#1565c0", "#c2185b", "#e67e22", "#6a1b9a", "#00838f"];

@@ -48,7 +48,7 @@ pnpm tauri dev
 | 실시간 라이브 전사 (C5) | ✅ LocalAgreement Rust |
 | **화자 라벨 전사 (C6)** | ✅ **sherpa-onnx CAM++ 온라인 화자분리(Rust)** — 2화자 구분·재식별 검증 |
 | 화자 등록·식별 (C13) | ⚠️ 클러스터링/재식별은 됨. 사용자 이름 등록 UI는 미구현 |
-| VAD (C4) | ⚠️ whisper.cpp 내부 무음 처리. 명시적 Silero VAD 게이트 미구현 |
+| VAD (C4) | ⚠️ 게이트 trait·로직은 마련. sherpa-rs Silero가 SIGSEGV라 보류 → whisper.cpp 무음 처리로 대체 |
 | 한·영 (C10) | ✅ multilingual + 언어 고정 |
 | 자원 모니터 | ✅ | 내보내기(C11) ✅ | 저지연 ✅ |
 | 교체형 백엔드 (C3) | ⚠️ Whisper 5종(Voxtral/Qwen은 Python 필요 → no-Python 규칙으로 제외) |

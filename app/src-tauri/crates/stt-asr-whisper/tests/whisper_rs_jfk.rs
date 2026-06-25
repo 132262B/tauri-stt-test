@@ -29,6 +29,27 @@ fn jfk_rust_native() {
     assert!(low.contains("country"), "전사에 'country' 없음: {text:?}");
 }
 
+/// 자동 언어감지(language=None)가 한국어를 영어가 아닌 한글로 전사하는지 검증.
+/// (회귀 방지: whisper.cpp 기본 언어 "en" 으로 한글이 영어로 새던 버그)
+#[test]
+#[ignore = "ggml 모델 필요. --ignored 로 실행"]
+fn korean_autodetect_not_english() {
+    let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let model = base.join("models/ggml/ggml-base.bin");
+    let wav = base.join("test-data/ko_test.wav");
+    assert!(wav.exists(), "한국어 오디오 없음: {wav:?}");
+    let mut reader = hound::WavReader::open(&wav).expect("wav open");
+    let audio: Vec<f32> = reader.samples::<i16>().map(|s| s.unwrap() as f32 / 32768.0).collect();
+
+    // language=None → "auto" 감지 경로.
+    let backend = WhisperRsBackend::load(&model, None).expect("load");
+    let tokens = backend.transcribe(&audio, "").expect("transcribe");
+    let text: String = tokens.iter().map(|t| t.text.as_str()).collect();
+    eprintln!("=== KO autodetect: {text}");
+    let hangul = text.chars().filter(|c| ('\u{AC00}'..='\u{D7A3}').contains(c)).count();
+    assert!(hangul >= 5, "한글이 거의 없음(영어로 샘) → 자동감지 실패: {text:?}");
+}
+
 /// turbo·large-v3 가 whisper-rs 0.16 에서 로드/전사되는지 검증.
 #[test]
 #[ignore = "큰 모델 필요. --ignored 로 실행"]

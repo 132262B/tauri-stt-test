@@ -50,8 +50,11 @@ impl WhisperRsBackend {
         let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
         params.set_n_threads(4);
         params.set_translate(false);
-        if let Some(l) = &self.language {
-            params.set_language(Some(l.as_str()));
+        // whisper.cpp 기본 언어는 "en" 이라, None(자동) 일 때 반드시 "auto" 를 명시해야
+        // 언어 자동 감지가 동작한다. (이 설정이 없으면 한국어 발화가 영어로 전사됨)
+        match &self.language {
+            Some(l) => params.set_language(Some(l.as_str())),
+            None => params.set_language(Some("auto")),
         }
         if !init_prompt.is_empty() {
             params.set_initial_prompt(init_prompt);

@@ -26,6 +26,7 @@ pub fn run() {
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             commands::ping,
+            commands::list_inputs,
             commands::start_session,
             commands::stop_session,
             commands::export_transcript

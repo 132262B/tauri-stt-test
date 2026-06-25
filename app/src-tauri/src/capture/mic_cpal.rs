@@ -11,12 +11,21 @@ use std::thread;
 use super::resample::{Resampler16k, TARGET_SR};
 use super::{AudioFrame, AudioSource, CaptureControl};
 
-/// 기본 입력 장치에서 캡처를 시작한다. 16kHz mono `AudioFrame` 을 `tx` 로 보낸다.
-pub fn start_mic(tx: Sender<AudioFrame>) -> Result<CaptureControl, String> {
+/// 사용 가능한 입력 장치 이름 목록.
+pub fn list_devices() -> Vec<String> {
+    let host = cpal::default_host();
+    match host.input_devices() {
+        Ok(devs) => devs.filter_map(|d| d.name().ok()).collect(),
+        Err(_) => Vec::new(),
+    }
+}
+
+/// 입력 장치에서 캡처를 시작한다. device_name=None 이면 기본 장치. 16kHz mono `AudioFrame` 송신.
+pub fn start_mic(tx: Sender<AudioFrame>, device_name: Option<String>) -> Result<CaptureControl, String> {
     let (stop_tx, stop_rx) = channel::<()>();
     let (ready_tx, ready_rx) = channel::<Result<(), String>>();
 
-    thread::spawn(move || match build_and_play(tx) {
+    thread::spawn(move || match build_and_play(tx, device_name) {
         Ok(stream) => {
             ready_tx.send(Ok(())).ok();
             // stop 신호(또는 sender drop)까지 블록. 이후 stream 이 drop 되며 캡처 정지.
@@ -35,11 +44,19 @@ pub fn start_mic(tx: Sender<AudioFrame>) -> Result<CaptureControl, String> {
     }
 }
 
-fn build_and_play(tx: Sender<AudioFrame>) -> Result<cpal::Stream, String> {
+fn build_and_play(tx: Sender<AudioFrame>, device_name: Option<String>) -> Result<cpal::Stream, String> {
     let host = cpal::default_host();
-    let device = host
-        .default_input_device()
-        .ok_or("기본 입력 장치를 찾을 수 없음")?;
+    let device = match device_name {
+        Some(name) if !name.is_empty() => host
+            .input_devices()
+            .map_err(|e| e.to_string())?
+            .find(|d| d.name().map(|n| n == name).unwrap_or(false))
+            .ok_or_else(|| format!("입력 장치 '{name}' 를 찾을 수 없음"))?,
+        _ => host
+            .default_input_device()
+            .ok_or("기본 입력 장치를 찾을 수 없음")?,
+    };
+    let dev_name = device.name().unwrap_or_else(|_| "?".into());
     let supported = device
         .default_input_config()
         .map_err(|e| e.to_string())?;
@@ -48,7 +65,7 @@ fn build_and_play(tx: Sender<AudioFrame>) -> Result<cpal::Stream, String> {
     let fmt = supported.sample_format();
     let config: cpal::StreamConfig = supported.into();
 
-    eprintln!("[capture] 입력장치 sr={in_sr} ch={channels} fmt={fmt:?} → 16k mono");
+    eprintln!("[capture] 입력장치='{dev_name}' sr={in_sr} ch={channels} fmt={fmt:?} → 16k mono");
 
     let mut resampler = Resampler16k::new(in_sr)?;
     let mut t_cursor = 0.0f64;

@@ -15,6 +15,19 @@ pub fn ping() -> &'static str {
 
 /// 전사 세션 시작 — 마이크 캡처 + 사이드카 MLX Whisper 전사. 데스크톱 전용(iOS는 P3).
 /// model: MLX Whisper HF repo id(None=기본 turbo).
+/// 사용 가능한 입력(마이크) 장치 이름 목록.
+#[tauri::command]
+pub fn list_inputs() -> Vec<String> {
+    #[cfg(desktop)]
+    {
+        crate::capture::mic_cpal::list_devices()
+    }
+    #[cfg(not(desktop))]
+    {
+        Vec::new()
+    }
+}
+
 #[tauri::command]
 pub fn start_session(
     app: tauri::AppHandle,
@@ -22,6 +35,7 @@ pub fn start_session(
     model: Option<String>,
     lang: Option<String>,
     input: Option<String>,
+    device: Option<String>,
 ) -> Result<(), String> {
     #[cfg(desktop)]
     {
@@ -32,13 +46,15 @@ pub fn start_session(
         // 빈 문자열("")은 auto 로 간주.
         let lang = lang.filter(|s| !s.is_empty());
         let input = input.unwrap_or_else(|| "mic".into());
-        let handle = crate::session::start(app, state.transcript.clone(), model, lang, input)?;
+        let device = device.filter(|s| !s.is_empty());
+        let handle =
+            crate::session::start(app, state.transcript.clone(), model, lang, input, device)?;
         *guard = Some(handle);
         Ok(())
     }
     #[cfg(not(desktop))]
     {
-        let _ = (app, state, model, lang, input);
+        let _ = (app, state, model, lang, input, device);
         Err("이 플랫폼의 전사는 아직 미지원(P3)".into())
     }
 }

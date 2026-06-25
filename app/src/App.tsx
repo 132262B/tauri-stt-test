@@ -58,6 +58,8 @@ function App() {
   const [model, setModel] = useState(MODELS[0].id);
   const [lang, setLang] = useState(""); // "" = 자동
   const [input, setInput] = useState("mic"); // mic | system | both
+  const [devices, setDevices] = useState<string[]>([]);
+  const [device, setDevice] = useState(""); // "" = 기본 장치
   const [level, setLevel] = useState(0); // 입력 RMS (0..~0.3)
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -65,6 +67,15 @@ function App() {
     invoke<string>("ping")
       .then((r) => setIpc(`IPC ${r}`))
       .catch((e) => setIpc(`IPC 오류: ${e}`));
+
+    invoke<string[]>("list_inputs")
+      .then((ds) => {
+        setDevices(ds);
+        // 내장 마이크 자동 우선 선택(iPhone/BlackHole 등 무음 장치 회피)
+        const builtin = ds.find((d) => /MacBook|내장|Built-?in/i.test(d));
+        if (builtin) setDevice(builtin);
+      })
+      .catch(() => {});
 
     const un1 = listen<TranscriptSnapshot>("transcript_update", (e) => {
       setLines(e.payload.lines);
@@ -109,7 +120,7 @@ function App() {
       } else {
         setLines([]);
         setBuffer("");
-        await invoke("start_session", { model, lang, input });
+        await invoke("start_session", { model, lang, input, device });
         setRunning(true);
       }
     } catch (e) {
@@ -190,6 +201,19 @@ function App() {
                 <option value="both">마이크 + 시스템 오디오</option>
               </select>
             </label>
+            {input !== "system" && (
+              <label className="field">
+                <span>마이크 장치</span>
+                <select value={device} onChange={(e) => setDevice(e.target.value)} disabled={running}>
+                  <option value="">기본 장치</option>
+                  {devices.map((d) => (
+                    <option key={d} value={d}>
+                      {d}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <button onClick={toggle} className={running ? "stop" : "start"}>
               {running ? "■ 전사 정지" : "● 전사 시작"}
             </button>

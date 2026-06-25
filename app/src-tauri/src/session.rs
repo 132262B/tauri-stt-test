@@ -33,6 +33,7 @@ pub fn start(
     model_id: Option<String>,
     lang: Option<String>,
     input: String,
+    device: Option<String>,
 ) -> Result<SessionHandle, String> {
     use std::path::PathBuf;
     use std::sync::mpsc as std_mpsc;
@@ -198,17 +199,17 @@ pub fn start(
         "both" => {
             let (mic_tx, mic_rx) = std_mpsc::channel::<AudioFrame>();
             let (sys_tx, sys_rx) = std_mpsc::channel::<AudioFrame>();
-            let mic_c = mic_cpal::start_mic(mic_tx)?;
+            let mic_c = mic_cpal::start_mic(mic_tx, device.clone())?;
             let sys_c = crate::capture::screencapturekit::start_system(sys_tx)?;
             crate::capture::mixer::spawn_mixer(mic_rx, sys_rx, af_tx);
             vec![mic_c, sys_c]
         }
-        _ => vec![mic_cpal::start_mic(af_tx)?],
+        _ => vec![mic_cpal::start_mic(af_tx, device.clone())?],
     };
     #[cfg(not(target_os = "macos"))]
     let captures: Vec<CaptureControl> = {
-        let _ = &input; // 비-macOS는 마이크만
-        vec![mic_cpal::start_mic(af_tx)?]
+        let _ = &input;
+        vec![mic_cpal::start_mic(af_tx, device.clone())?]
     };
 
     Ok(SessionHandle {

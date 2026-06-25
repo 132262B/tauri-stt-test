@@ -6,6 +6,7 @@ use crate::asr::{AsrConfig, AsrError, AsrToken, StreamingAsrBackend};
 use crate::diar::Diarizer;
 use crate::metrics::SessionMetrics;
 use crate::output::{CommittedToken, TranscriptLine, TranscriptSnapshot};
+use crate::vad::Vad;
 
 const SAMPLE_RATE: usize = 16_000;
 /// 이만큼(샘플) 누적될 때마다 process_iter 1회(≈1초).
@@ -30,6 +31,7 @@ pub async fn run_session(
     snap_tx: mpsc::Sender<TranscriptSnapshot>,
     metrics: SessionMetrics,
     mut diarizer: Option<Box<dyn Diarizer>>,
+    mut vad: Option<Box<dyn Vad>>,
 ) -> Result<(), AsrError> {
     backend.configure(&cfg).await?;
     let _ = backend.warmup().await;
@@ -38,17 +40,32 @@ pub async fn run_session(
     let mut lines: Vec<TranscriptLine> = Vec::new();
     let mut full_audio: Vec<f32> = Vec::new(); // 화자 분리용 절대시각 오디오 보존
     let mut since_iter = 0usize;
+    let mut speech_in_window = false; // VAD: 현 윈도우에 음성 있었나
     let mut last_upto = 0.0_f64;
 
     while let Some(chunk) = pcm_rx.recv().await {
         last_upto = chunk.t_end;
         since_iter += chunk.samples.len();
+        match vad.as_mut() {
+            Some(v) => {
+                if v.is_speech(&chunk.samples) {
+                    speech_in_window = true;
+                }
+            }
+            None => speech_in_window = true,
+        }
         backend.insert_audio_chunk(&chunk.samples, chunk.t_end);
         if diarizer.is_some() {
             full_audio.extend_from_slice(&chunk.samples);
         }
 
         if since_iter >= ITER_SAMPLES {
+            // VAD 게이트: 윈도우 전체가 무음이면 ASR 추론을 건너뜀(연산 절약).
+            if !speech_in_window {
+                since_iter = 0;
+                continue;
+            }
+            speech_in_window = false;
             let audio_sec = since_iter as f32 / SAMPLE_RATE as f32;
             since_iter = 0;
             let t0 = Instant::now();

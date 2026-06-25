@@ -8,3 +8,4 @@ pub mod diar;
 pub mod metrics;
 pub mod output;
 pub mod pipeline;
+pub mod vad;

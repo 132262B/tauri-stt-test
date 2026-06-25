@@ -41,6 +41,7 @@ pub fn start(
     use stt_asr_whisper::WhisperStreamingBackend;
     use stt_core::asr::{AsrConfig, StreamingAsrBackend};
     use stt_core::diar::Diarizer;
+    use stt_core::vad::Vad;
     use stt_core::metrics::SessionMetrics;
     use stt_core::output::{MetricsSnapshot, TranscriptSnapshot};
     use stt_core::pipeline::{run_session, AudioChunk};
@@ -98,10 +99,14 @@ pub fn start(
             }
         };
 
+    // VAD 게이트 자리(trait+param 준비). sherpa-rs Silero 는 현재 SIGSEGV 라 보류 —
+    // whisper.cpp 가 무음을 자체 처리하므로 None 으로 진행(docs/03-progress.md).
+    let vad: Option<Box<dyn Vad>> = None;
+
     let metrics_for_driver = metrics.clone();
     tauri::async_runtime::spawn(async move {
         if let Err(e) =
-            run_session(backend, cfg, pcm_rx, snap_tx, metrics_for_driver, diarizer).await
+            run_session(backend, cfg, pcm_rx, snap_tx, metrics_for_driver, diarizer, vad).await
         {
             eprintln!("[session] run_session 오류: {e}");
         }

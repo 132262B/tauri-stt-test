@@ -31,7 +31,7 @@ async fn jfk_rust_native_streaming() {
     let (pcm_tx, pcm_rx) = mpsc::channel::<AudioChunk>(64);
     let (snap_tx, mut snap_rx) = mpsc::channel::<TranscriptSnapshot>(64);
     let h = tokio::spawn(async move {
-        run_session(backend, cfg, pcm_rx, snap_tx, SessionMetrics::default(), None).await
+        run_session(backend, cfg, pcm_rx, snap_tx, SessionMetrics::default(), None, None).await
     });
 
     let mut t = 0.0;

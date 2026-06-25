@@ -121,7 +121,7 @@ impl SelfStreamingBackend for QwenBackend {
         Ok(())
     }
 
-    fn transcribe_full(&mut self, samples: &[f32]) -> Result<String, AsrError> {
+    fn transcribe_full(&mut self, samples: &[f32], _prompt: &str) -> Result<String, AsrError> {
         if samples.is_empty() {
             return Ok(String::new());
         }

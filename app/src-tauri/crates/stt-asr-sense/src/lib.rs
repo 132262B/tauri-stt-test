@@ -57,7 +57,7 @@ impl SelfStreamingBackend for SenseVoiceBackend {
         Ok(()) // 모델/언어는 new()에서 적재됨
     }
 
-    fn transcribe_full(&mut self, samples: &[f32]) -> Result<String, AsrError> {
+    fn transcribe_full(&mut self, samples: &[f32], _prompt: &str) -> Result<String, AsrError> {
         let r = self.rec.transcribe(16000, samples);
         Ok(strip_tags(&r.text))
     }

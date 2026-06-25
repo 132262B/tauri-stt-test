@@ -259,9 +259,10 @@ impl SelfStreamingBackend for WhisperSelfBackend {
         Ok(())
     }
 
-    fn transcribe_full(&mut self, samples: &[f32]) -> Result<String, AsrError> {
+    fn transcribe_full(&mut self, samples: &[f32], prompt: &str) -> Result<String, AsrError> {
         let b = self.backend.as_ref().ok_or(AsrError::NotReady)?;
-        let toks = b.transcribe(samples, "").map_err(AsrError::Inference)?;
+        // 직전 확정 텍스트를 whisper initial_prompt 로 전달 → 경계 연속성/정확도 향상.
+        let toks = b.transcribe(samples, prompt).map_err(AsrError::Inference)?;
         Ok(toks
             .iter()
             .map(|t| t.text.as_str())

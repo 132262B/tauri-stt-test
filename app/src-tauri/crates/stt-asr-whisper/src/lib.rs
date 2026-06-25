@@ -7,8 +7,8 @@ use std::path::{Path, PathBuf};
 
 use async_trait::async_trait;
 use stt_core::asr::{
-    AsrConfig, AsrError, AsrToken, BackendCaps, OnlineAsrProcessor, StreamingAsrBackend,
-    WhisperLikeBackend,
+    AsrConfig, AsrError, AsrToken, BackendCaps, OnlineAsrProcessor, SelfStreamingBackend,
+    SelfStreamingProcessor, StreamingAsrBackend, WhisperLikeBackend,
 };
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
 
@@ -229,5 +229,57 @@ impl StreamingAsrBackend for WhisperStreamingBackend {
             tokenizer_id: "whisper",
         }
     }
+}
+
+/// Whisper 를 발화 단위(전체 텍스트) 백엔드로 노출 — SelfStreamingProcessor 가 연속 2회
+/// 전사의 공통 단어 접두사만 확정한다. 토큰 타임스탬프에 의존하지 않으므로 한국어에서
+/// 조각/중복/어순 뒤섞임이 없다(LocalAgreement 의 토큰-타임스탬프 의존 문제 회피).
+pub struct WhisperSelfBackend {
+    models_dir: PathBuf,
+    language: Option<String>,
+    backend: Option<WhisperRsBackend>,
+}
+
+impl WhisperSelfBackend {
+    pub fn new(models_dir: impl Into<PathBuf>) -> Self {
+        Self {
+            models_dir: models_dir.into(),
+            language: None,
+            backend: None,
+        }
+    }
+}
+
+impl SelfStreamingBackend for WhisperSelfBackend {
+    fn configure(&mut self, cfg: &AsrConfig) -> Result<(), AsrError> {
+        let path = resolve_ggml(&self.models_dir, &cfg.model_id)?;
+        self.language = cfg.language.clone();
+        self.backend =
+            Some(WhisperRsBackend::load(&path, cfg.language.clone()).map_err(AsrError::Inference)?);
+        Ok(())
+    }
+
+    fn transcribe_full(&mut self, samples: &[f32]) -> Result<String, AsrError> {
+        let b = self.backend.as_ref().ok_or(AsrError::NotReady)?;
+        let toks = b.transcribe(samples, "").map_err(AsrError::Inference)?;
+        Ok(toks
+            .iter()
+            .map(|t| t.text.as_str())
+            .collect::<String>()
+            .trim()
+            .to_string())
+    }
+
+    fn set_language(&mut self, lang: Option<String>) {
+        self.language = lang.clone();
+        if let Some(b) = &mut self.backend {
+            b.set_language(lang);
+        }
+    }
+}
+
+/// ggml 모델 디렉터리로부터 SelfStreaming 기반 StreamingAsrBackend 를 만든다.
+pub fn self_streaming_backend(models_dir: impl Into<PathBuf>) -> Box<dyn StreamingAsrBackend> {
+    Box::new(SelfStreamingProcessor::new(WhisperSelfBackend::new(models_dir)))
 }
 

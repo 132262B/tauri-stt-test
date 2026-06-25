@@ -44,7 +44,6 @@ pub fn start(
     use tauri::Emitter;
     use tokio::sync::mpsc;
 
-    use stt_asr_whisper::WhisperStreamingBackend;
     use stt_core::asr::{AsrConfig, StreamingAsrBackend};
     use stt_core::diar::Diarizer;
     use stt_core::vad::Vad;
@@ -125,7 +124,9 @@ pub fn start(
             cfg.language.clone(),
         )?
     } else {
-        Box::new(WhisperStreamingBackend::new(crate_dir.join("models/ggml")))
+        // Whisper 도 SelfStreaming(전체 텍스트 공통접두사 확정)으로 — 한국어에서 토큰
+        // 타임스탬프 기반 LocalAgreement 의 조각/중복/어순 뒤섞임을 회피.
+        stt_asr_whisper::self_streaming_backend(crate_dir.join("models/ggml"))
     };
 
     // 온라인 화자 분리(sherpa-onnx, Rust). diarize=false 면 끔(라인은 시간+텍스트만).

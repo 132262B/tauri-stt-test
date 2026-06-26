@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+APP_DIR="${ROOT_DIR}/app"
+
+INSTALL_MODE="auto"
+TAURI_ARGS=()
+
+usage() {
+  cat <<'EOF'
+Usage:
+  ./run-app [options] [-- tauri-dev-args...]
+
+Options:
+  --coreml       Enable Q5 CoreML encoder. Faster experiment, higher memory.
+  --gpu          Enable whisper.cpp GPU/Metal path via ASR_WHISPER_USE_GPU=1.
+  --install      Run pnpm install before launching.
+  --no-install   Do not auto-install even when app/node_modules is missing.
+  -h, --help     Show this help.
+
+Default mode is memory-saving Q5: CoreML encoder OFF, GPU env OFF.
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --coreml)
+      export ASR_Q5_USE_COREML=1
+      ;;
+    --gpu)
+      export ASR_WHISPER_USE_GPU=1
+      ;;
+    --install)
+      INSTALL_MODE="always"
+      ;;
+    --no-install)
+      INSTALL_MODE="never"
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --)
+      shift
+      TAURI_ARGS+=("$@")
+      break
+      ;;
+    *)
+      TAURI_ARGS+=("$1")
+      ;;
+  esac
+  shift
+done
+
+if ! command -v pnpm >/dev/null 2>&1; then
+  echo "pnpm not found. Install pnpm or add it to PATH, then retry." >&2
+  exit 1
+fi
+
+if [[ "${INSTALL_MODE}" == "always" || ( "${INSTALL_MODE}" == "auto" && ! -d "${APP_DIR}/node_modules" ) ]]; then
+  echo "[run-app] Installing frontend dependencies..."
+  (cd "${APP_DIR}" && pnpm install)
+fi
+
+echo "[run-app] Launching Tauri dev app"
+echo "[run-app] ASR_Q5_USE_COREML=${ASR_Q5_USE_COREML:-0} ASR_WHISPER_USE_GPU=${ASR_WHISPER_USE_GPU:-0}"
+
+cd "${APP_DIR}"
+if [[ ${#TAURI_ARGS[@]} -gt 0 ]]; then
+  exec pnpm tauri dev "${TAURI_ARGS[@]}"
+else
+  exec pnpm tauri dev
+fi

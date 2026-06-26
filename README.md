@@ -53,7 +53,18 @@ export HF_HOME="$PWD/.hf-cache"   # 모델 캐시도 프로젝트 내부
     --model mlx-community/whisper-large-v3-turbo
 ```
 
-## 실행 (모두 `app/` 폴더에서)
+## 실행
+
+루트에서 바로 실행:
+
+```bash
+./run-app              # 기본: Q5 CoreML OFF, GPU env OFF (메모리 절약)
+make dev               # 위와 동일
+./run-app --coreml     # Q5 CoreML encoder 실험용(메모리 증가)
+./run-app --gpu        # whisper.cpp GPU/Metal env 실험용
+```
+
+기존 방식도 그대로 가능:
 
 ```bash
 cd app

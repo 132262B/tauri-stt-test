@@ -3,6 +3,7 @@
 mod backend;
 pub mod self_stream;
 mod token;
+pub mod wordtime;
 
 pub use backend::{AsrConfig, AsrProfile, BackendCaps, StreamingAsrBackend};
 pub use self_stream::{SelfStreamingBackend, SelfStreamingProcessor};

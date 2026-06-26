@@ -29,6 +29,20 @@ interface Metrics {
   backend: string;
   model: string;
 }
+interface ModelStatus {
+  id: string;
+  label: string;
+  present: boolean;
+  approxMb: number;
+  downloadable: boolean;
+}
+interface DlProgress {
+  model: string;
+  file: string;
+  received: number;
+  total: number;
+  pct: number;
+}
 
 const MODELS: { id: string; label: string }[] = [
   { id: "ggml-large-v3-turbo-q5_0", label: "Whisper · turbo Q5_0" },
@@ -67,6 +81,9 @@ function App() {
   const [diarize, setDiarize] = useState(true); // 화자 분리 on/off
   const [diarizing, setDiarizing] = useState(false);
   const [level, setLevel] = useState(0); // 입력 RMS (0..~0.3)
+  const [modelStatus, setModelStatus] = useState<ModelStatus[]>([]);
+  const [downloading, setDownloading] = useState<string | null>(null); // 다운로드 중 모델 id
+  const [dlProgress, setDlProgress] = useState<DlProgress | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const startedAtRef = useRef<number | null>(null);
 
@@ -95,13 +112,43 @@ function App() {
     });
     const un3 = listen<Metrics>("metrics_update", (e) => setMetrics(e.payload));
     const un4 = listen<number>("audio_level", (e) => setLevel(e.payload));
+    const un5 = listen<DlProgress>("model_download_progress", (e) => setDlProgress(e.payload));
+
+    invoke<ModelStatus[]>("model_status")
+      .then(setModelStatus)
+      .catch(() => {});
+
     return () => {
       un1.then((f) => f());
       un2.then((f) => f());
       un3.then((f) => f());
       un4.then((f) => f());
+      un5.then((f) => f());
     };
   }, []);
+
+  async function refreshModels() {
+    try {
+      setModelStatus(await invoke<ModelStatus[]>("model_status"));
+    } catch {
+      /* noop */
+    }
+  }
+
+  async function downloadModel(id: string) {
+    setErr("");
+    setDownloading(id);
+    setDlProgress(null);
+    try {
+      await invoke("download_model", { id });
+      await refreshModels();
+    } catch (e) {
+      setErr(String(e));
+    } finally {
+      setDownloading(null);
+      setDlProgress(null);
+    }
+  }
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "auto" });
@@ -285,6 +332,42 @@ function App() {
                 ))}
               </select>
             </label>
+            {(() => {
+              const st = modelStatus.find((m) => m.id === model);
+              if (!st) return null;
+              const isDl = downloading === model;
+              return (
+                <div className="model-status">
+                  {st.present ? (
+                    <span className="ms-ok">✓ 설치됨</span>
+                  ) : isDl ? (
+                    <div className="dl">
+                      <div className="dl-bar">
+                        <div
+                          className="dl-fill"
+                          style={{ width: `${Math.max(2, (dlProgress?.pct ?? 0) * 100)}%` }}
+                        />
+                      </div>
+                      <span className="dl-text">
+                        {dlProgress && dlProgress.total > 0
+                          ? `${(dlProgress.received / 1e6).toFixed(0)} / ${(dlProgress.total / 1e6).toFixed(0)} MB (${Math.round(dlProgress.pct * 100)}%)`
+                          : "다운로드 중…"}
+                      </span>
+                    </div>
+                  ) : st.downloadable ? (
+                    <button
+                      className="dl-btn"
+                      onClick={() => downloadModel(model)}
+                      disabled={!!downloading || active}
+                    >
+                      ⬇ 클라우드에서 다운로드 (≈{st.approxMb}MB)
+                    </button>
+                  ) : (
+                    <span className="ms-warn">수동 배치 필요 (자동 다운로드 미지원)</span>
+                  )}
+                </div>
+              );
+            })()}
             <label className="field">
               <span>언어</span>
               <select value={lang} onChange={(e) => setLang(e.target.value)} disabled={active}>

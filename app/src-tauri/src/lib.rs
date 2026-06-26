@@ -3,6 +3,7 @@ mod capture;
 mod commands;
 mod events;
 mod export;
+mod models;
 mod session;
 
 use app_state::AppState;
@@ -36,7 +37,9 @@ pub fn run() {
             commands::start_session,
             commands::stop_session,
             commands::clear_transcript,
-            commands::export_transcript
+            commands::export_transcript,
+            commands::model_status,
+            commands::download_model
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -40,9 +40,13 @@ tauri-plugin-store = "2"   # config·화자 갤러리 경량 저장
 tauri-plugin-dialog = "2"  # 전사 내보내기 저장 대화상자
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+ureq = "2"                 # 모델 클라우드 다운로드(HF resolve, 진행률 스트리밍)
 cpal = "0.15"              # 마이크 캡처(데스크톱). iOS 캡처는 P3에서 AVAudioEngine
 rubato = "0.15"            # 16kHz mono 리샘플(anti-alias polyphase/FFT)
-hound = "3"                # 파일 입력(데모/테스트)용 WAV 읽기
+hound = "3"                # WAV 쓰기(테스트 자산 생성)용
+# 파일 입력 디코드(순수 Rust, 크로스플랫폼) — mp3/m4a(aac/alac)/flac/ogg/wav.
+# FFmpeg 서브프로세스(iOS/Android 불가)를 대체하는 in-process 디코더.
+symphonia = { version = "0.5", default-features = false, features = ["mp3", "aac", "isomp4", "alac", "flac", "ogg", "vorbis", "wav", "pcm"] }
 tokio = { version = "1", features = ["sync", "rt", "time"] }  # 세션 채널·자원모니터 주기
 sysinfo = "0.33"           # 앱+사이드카 CPU/RSS 측정(자원 모니터)
 asr-core = { path = "crates/asr-core" }

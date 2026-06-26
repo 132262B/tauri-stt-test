@@ -41,7 +41,6 @@ pub fn start(
     device: Option<String>,
     diarize: bool,
 ) -> Result<SessionHandle, String> {
-    use std::path::PathBuf;
     use std::sync::mpsc as std_mpsc;
     use std::time::{Duration, Instant};
 
@@ -129,26 +128,28 @@ pub fn start(
 
     // 전사는 전부 Rust 네이티브(in-process). Python/Node 프로세스 없음.
     // ggml-* = Whisper(whisper.cpp), sensevoice = SenseVoice(sherpa-onnx 다국어).
-    let crate_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    // 모델 루트는 런타임에 해석한다(쓰기 가능한 app_data_dir; 개발 빌드는 인-트리).
+    // 컴파일타임 env!(CARGO_MANIFEST_DIR) 경로는 패키지 번들에 존재하지 않아 폐기.
+    let models_root = crate::models::models_root(&app);
     let backend: Box<dyn StreamingAsrBackend> = if model_id == "sensevoice" {
-        asr_sense::streaming_backend(crate_dir.join("models/sense"), cfg.language.clone())?
+        asr_sense::streaming_backend(models_root.join("sense"), cfg.language.clone())?
     } else if model_id == "qwen" || model_id.starts_with("qwen3-asr") {
         asr_qwen::streaming_backend(
-            crate_dir.join("models/qwen"),
+            models_root.join("qwen"),
             &asr_qwen::QWEN_06B,
             cfg.language.clone(),
         )?
     } else {
         // Whisper 도 SelfStreaming(전체 텍스트 공통접두사 확정)으로 — 한국어에서 토큰
         // 타임스탬프 기반 LocalAgreement 의 조각/중복/어순 뒤섞임을 회피.
-        asr_whisper::self_streaming_backend(crate_dir.join("models/ggml"))
+        asr_whisper::self_streaming_backend(models_root.join("ggml"))
     };
 
     // 화자 분리(pyannote segmentation + CAM++ + 클러스터링, sherpa-onnx). 종료 시 누적 오디오
     // 전체를 분석해 화자별 라인 재구성. diarize=false 면 끔(라인은 시간+텍스트만).
     let diarizer: Option<Box<dyn Diarizer>> = if diarize {
         // 회의 화자 수를 모르면 None(자동), 알면 Some(n). 우선 자동.
-        match diar_pyannote::PyannoteDiarizer::with_paths(crate_dir.join("models"), None) {
+        match diar_pyannote::PyannoteDiarizer::with_paths(models_root.clone(), None) {
             Ok(d) => Some(Box::new(d)),
             Err(e) => {
                 eprintln!("[session] 화자분리 비활성: {e}");
@@ -257,7 +258,7 @@ pub fn start(
     });
 
     // 파일 데모 입력: 마이크/권한 없이 전사가 도는지 앱에서 확인용(번들된 회의 음성).
-    let demo_wav = || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("test-data/meeting.wav");
+    let demo_wav = || crate::models::data_file(&app, "test-data/meeting.wav");
 
     // 입력 소스 시작. file/mic/system/both. 시스템 오디오는 macOS ScreenCaptureKit(C7).
     #[cfg(target_os = "macos")]

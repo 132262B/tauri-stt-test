@@ -13,6 +13,7 @@ use async_trait::async_trait;
 
 use super::backend::{AsrConfig, AsrProfile, BackendCaps, StreamingAsrBackend};
 use super::token::{AsrError, AsrToken};
+use super::wordtime;
 
 const SR: f64 = 16_000.0;
 /// 리셋 가능한 "무음" 판정 RMS 임계.
@@ -135,11 +136,22 @@ impl<B: SelfStreamingBackend> SelfStreamingProcessor<B> {
 
     fn tokens(&self, words: &[String], lo: usize, hi: usize, total: usize) -> Vec<AsrToken> {
         let dur = self.audio.len() as f64 / SR;
-        let total = total.max(1) as f64;
+        let n = total.max(1);
+        // 윈도우 시간을 단어 인덱스로 균등 배분하지 않고 **글자수(말한 길이 근사)에 비례**해
+        // 배분한다 — 경계가 실제에 가까워져 화자분리의 토큰-구간 매핑 정확도가 오른다.
+        // (WhisperLiveKit qwen 정렬의 글자비례 아이디어 이식, wordtime::time_weight.)
+        let weights: Vec<f64> = (0..n)
+            .map(|j| words.get(j).map(|w| wordtime::time_weight(w)).unwrap_or(1.0))
+            .collect();
+        let total_w: f64 = weights.iter().sum::<f64>().max(1.0);
+        let mut cum = vec![0.0f64; n + 1];
+        for j in 0..n {
+            cum[j + 1] = cum[j] + weights[j];
+        }
         (lo..hi)
             .map(|j| {
-                let s = self.offset + (j as f64 / total) * dur;
-                let e = self.offset + ((j as f64 + 1.0) / total) * dur;
+                let s = self.offset + dur * (cum[j] / total_w);
+                let e = self.offset + dur * (cum[j + 1] / total_w);
                 let text = if j > 0 {
                     format!(" {}", words[j])
                 } else {

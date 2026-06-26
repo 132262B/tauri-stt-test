@@ -5,6 +5,7 @@
 
 pub mod asr;
 pub mod diar;
+pub mod eval;
 pub mod metrics;
 pub mod output;
 pub mod pipeline;

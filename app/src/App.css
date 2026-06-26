@@ -310,6 +310,52 @@ button.reset:hover {
   border: 1px solid #888;
 }
 
+.model-status {
+  margin: -4px 0 8px;
+  font-size: 0.8rem;
+}
+.model-status .ms-ok {
+  color: #2e7d32;
+}
+.model-status .ms-warn {
+  color: #b26a00;
+}
+.dl-btn {
+  padding: 5px 10px;
+  font-size: 0.8rem;
+  background: #396cd8;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.dl-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.dl {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dl-bar {
+  flex: 1;
+  height: 8px;
+  background: #d8d8d8;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.dl-fill {
+  height: 100%;
+  background: #396cd8;
+  transition: width 0.2s linear;
+}
+.dl-text {
+  white-space: nowrap;
+  opacity: 0.85;
+  font-variant-numeric: tabular-nums;
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     color: #f6f6f6;

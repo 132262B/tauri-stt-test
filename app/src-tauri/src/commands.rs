@@ -95,6 +95,21 @@ pub fn stop_session(state: State<AppState>) -> Result<(), String> {
     Ok(())
 }
 
+/// 설치된/누락 모델 상태 목록(id·라벨·존재여부·예상용량·자동다운로드 가능여부).
+#[tauri::command]
+pub fn model_status(app: tauri::AppHandle) -> Vec<crate::models::ModelStatus> {
+    crate::models::status(&app)
+}
+
+/// 모델을 클라우드(HuggingFace)에서 app_data_dir 로 다운로드한다.
+/// 진행률은 `model_download_progress` 이벤트로 전달된다. 받은 뒤엔 오프라인 동작.
+#[tauri::command]
+pub async fn download_model(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || crate::models::download(&app, &id))
+        .await
+        .map_err(|e| format!("다운로드 태스크 실패: {e}"))?
+}
+
 /// 현재 세션 전사를 파일로 내보낸다(txt/srt/json). path 는 프론트 저장 대화상자에서.
 #[tauri::command]
 pub fn export_transcript(

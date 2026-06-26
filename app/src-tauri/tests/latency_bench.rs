@@ -112,12 +112,6 @@ async fn latency_bench() {
     // Qwen 은 CPU 라 느림 → 정상상태 수렴에 충분한 짧은 구간으로.
     for (name, dir, spec, sec) in [
         ("qwen-0.6b", "models/qwen", &asr_qwen::QWEN_06B, 45usize),
-        (
-            "qwen-1.7b",
-            "models/qwen-1.7b",
-            &asr_qwen::QWEN_17B,
-            30usize,
-        ),
     ] {
         let d = base.join(dir);
         if !d.join("config.json").exists() {

@@ -33,7 +33,6 @@ interface Metrics {
 const MODELS: { id: string; label: string }[] = [
   { id: "ggml-large-v3-turbo-q5_0", label: "Whisper · turbo Q5_0" },
   { id: "qwen", label: "Qwen3-ASR · 0.6B" },
-  { id: "qwen-1.7b", label: "Qwen3-ASR · 1.7B" },
   { id: "sensevoice", label: "SenseVoice · 다국어" },
 ];
 

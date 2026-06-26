@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use asr_core::asr::SelfStreamingBackend;
-use asr_qwen::{QwenBackend, QWEN_06B, QWEN_17B};
+use asr_qwen::{QwenBackend, QWEN_06B};
 use asr_sense::SenseVoiceBackend;
 use asr_whisper::WhisperRsBackend;
 
@@ -197,10 +197,9 @@ fn model_sweep() {
         }
     }
 
-    // ---- Qwen3-ASR(0.6B / 1.7B): 풀패스(내부 세그먼트) ----
+    // ---- Qwen3-ASR(0.6B): 풀패스(내부 세그먼트) ----
     let qwen_models: &[(&str, &str, &str, &asr_qwen::QwenModelSpec)] = &[
         ("qwen-0.6b", "Qwen3-ASR 0.6B", "models/qwen", &QWEN_06B),
-        ("qwen-1.7b", "Qwen3-ASR 1.7B", "models/qwen-1.7b", &QWEN_17B),
     ];
     for (name, params, rel, spec) in qwen_models {
         let dir = base.join(rel);

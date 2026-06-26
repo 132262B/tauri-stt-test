@@ -23,7 +23,7 @@ extern "C" {
     fn free(ptr: *mut c_void); // C 가 malloc 한 문자열 해제용(libc)
 }
 
-/// Qwen3-ASR 모델 변종(HF repo + 필요한 파일 목록). 0.6B 는 단일, 1.7B 는 분할 safetensors.
+/// Qwen3-ASR 모델 변종(HF repo + 필요한 파일 목록). 0.6B 는 단일 safetensors.
 pub struct QwenModelSpec {
     pub repo: &'static str,
     pub files: &'static [&'static str],
@@ -36,20 +36,6 @@ pub const QWEN_06B: QwenModelSpec = QwenModelSpec {
         "config.json",
         "generation_config.json",
         "model.safetensors",
-        "vocab.json",
-        "merges.txt",
-    ],
-};
-
-/// Qwen3-ASR-1.7B (~4.4G, 분할 safetensors + index).
-pub const QWEN_17B: QwenModelSpec = QwenModelSpec {
-    repo: "Qwen/Qwen3-ASR-1.7B",
-    files: &[
-        "config.json",
-        "generation_config.json",
-        "model.safetensors.index.json",
-        "model-00001-of-00002.safetensors",
-        "model-00002-of-00002.safetensors",
         "vocab.json",
         "merges.txt",
     ],

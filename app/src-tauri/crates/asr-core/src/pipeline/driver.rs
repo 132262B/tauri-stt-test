@@ -34,6 +34,7 @@ pub async fn run_session(
     diarizer: Option<Box<dyn Diarizer>>,
     mut vad: Option<Box<dyn Vad>>,
     reset: Arc<AtomicBool>,
+    stop: Arc<AtomicBool>,
 ) -> Result<(), AsrError> {
     backend.configure(&cfg).await?;
     let _ = backend.warmup().await;
@@ -67,6 +68,11 @@ pub async fn run_session(
     let mut last_upto = 0.0_f64;
 
     while let Some(mut chunk) = pcm_rx.recv().await {
+        // 정지 신호: 즉시 흡수/처리 중단(버퍼된 잔여 오디오도 버림). 캡처가 채널을 닫기 전에도
+        // 전사 출력이 곧바로 멈추도록 — '정지=즉시 종료'. 이후 최종 flush(마지막 1윈도우)만 수행.
+        if stop.load(Ordering::Relaxed) {
+            break;
+        }
         if reset.swap(false, Ordering::Relaxed) {
             committed_text.clear();
             all_tokens.clear();
@@ -350,6 +356,7 @@ mod tests {
         let (pcm_tx, pcm_rx) = mpsc::channel::<AudioChunk>(4);
         let (snap_tx, mut snap_rx) = mpsc::channel::<TranscriptSnapshot>(4);
         let reset = Arc::new(AtomicBool::new(false));
+        let stop = Arc::new(AtomicBool::new(false));
 
         let driver = tokio::spawn(async move {
             run_session(
@@ -361,6 +368,7 @@ mod tests {
                 diarizer,
                 None,
                 reset,
+                stop,
             )
             .await
             .unwrap();

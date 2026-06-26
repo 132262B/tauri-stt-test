@@ -94,10 +94,14 @@ impl WhisperDecodeOptions {
             no_timestamps: true,
             single_segment: true,
             no_context: true,
-            audio_ctx: Some(if use_coreml { 1024 } else { 512 }),
+            audio_ctx: Some(if use_coreml {
+                1024
+            } else {
+                q5_windowed_audio_ctx()
+            }),
             max_tokens: Some(96),
             n_max_text_ctx: Some(0),
-            temperature_inc: 0.0,
+            temperature_inc: q5_temp_inc(),
             require_coreml_encoder: use_coreml && !allow_q5_without_coreml(),
             use_gpu: realtime_q5_use_gpu(),
             ..Self::default()
@@ -174,6 +178,9 @@ impl WhisperRsBackend {
         }
         let mut ctx_params = WhisperContextParameters::default();
         ctx_params.use_gpu(options.use_gpu);
+        if options.use_gpu && whisper_flash_attn() {
+            ctx_params.flash_attn(true);
+        }
         let ctx =
             WhisperContext::new_with_params(model_path.to_string_lossy().as_ref(), ctx_params)
                 .map_err(|e| format!("whisper 모델 적재 실패: {e}"))?;
@@ -495,7 +502,37 @@ fn clean_transcript_text(text: &str) -> String {
     if likely_repetitive_hallucination(text) {
         return String::new();
     }
-    text.to_string()
+    collapse_immediate_repeats(text)
+}
+
+/// 같은 단어가 연속 4회 이상 반복되면(환각 stutter: "개처럼 개처럼 개처럼 개처럼…") 1회로 접는다.
+/// 정상 발화의 강조 중복(2~3회)은 보존. 구두점은 무시하고 정규화 비교. 전사 결과를 막지 않고
+/// 보이는 반복만 정리하는 보수적 안전망(근본 해결은 temperature 폴백·audio_ctx).
+fn collapse_immediate_repeats(text: &str) -> String {
+    const RUN: usize = 4;
+    let words: Vec<&str> = text.split_whitespace().collect();
+    if words.len() < RUN {
+        return text.to_string();
+    }
+    let mut out: Vec<&str> = Vec::with_capacity(words.len());
+    let mut i = 0;
+    while i < words.len() {
+        let norm = normalize_word_for_overlap(words[i]);
+        let mut j = i + 1;
+        while j < words.len()
+            && !norm.is_empty()
+            && normalize_word_for_overlap(words[j]) == norm
+        {
+            j += 1;
+        }
+        if j - i >= RUN {
+            out.push(words[i]); // 연속 반복 → 1회로 접음
+        } else {
+            out.extend_from_slice(&words[i..j]);
+        }
+        i = j;
+    }
+    out.join(" ")
 }
 
 fn likely_repetitive_hallucination(text: &str) -> bool {
@@ -597,7 +634,18 @@ fn whisper_use_gpu() -> bool {
 }
 
 fn realtime_q5_use_gpu() -> bool {
-    env_bool("ASR_WHISPER_USE_GPU").unwrap_or(false)
+    // 라이브 Q5 인코더/디코더를 Metal GPU로 실행한다. CPU 단독이면 6초 윈도우 디코드가
+    // STEP(2s)을 넘겨 지연이 누적된다(벤치 90/90 실시간 미추종). whisper-rs는
+    // features=["metal"]로 이미 컴파일돼 있어 재빌드 없이 런타임 플래그만 켜면 된다.
+    // 데스크톱(Apple Silicon = 라이브 Q5 타깃)은 기본 ON, 검증 전인 iOS는 env opt-in.
+    // 문제 시 ASR_WHISPER_USE_GPU=0 으로 즉시 되돌릴 수 있다.
+    env_bool("ASR_WHISPER_USE_GPU").unwrap_or(cfg!(not(target_os = "ios")))
+}
+
+/// Metal flash attention(융합 어텐션). GPU일 때만 의미가 있고 DTW 미사용이라 호환.
+/// 기본 OFF — 같은 GPU 빌드에서 on/off A/B 측정용 opt-in.
+fn whisper_flash_attn() -> bool {
+    env_bool("ASR_WHISPER_FLASH_ATTN").unwrap_or(false)
 }
 
 fn env_bool(name: &str) -> Option<bool> {
@@ -608,6 +656,41 @@ fn env_bool(name: &str) -> Option<bool> {
             "0" | "false" | "no" | "off" => Some(false),
             _ => None,
         })
+}
+
+fn env_f64(name: &str) -> Option<f64> {
+    std::env::var(name)
+        .ok()
+        .and_then(|v| v.trim().parse::<f64>().ok())
+        .filter(|v| v.is_finite() && *v > 0.0)
+}
+
+fn env_usize(name: &str) -> Option<usize> {
+    std::env::var(name).ok().and_then(|v| v.trim().parse::<usize>().ok())
+}
+
+/// 윈도우(<=6s) Q5 인코더 audio_ctx. 기본 512. 더 줄이면(예: 320) 인코더는 빨라지지만
+/// 모델이 학습한 컨텍스트(1500)보다 과도하게 짧아져 한국어 반복/환각 루프가 늘어난다
+/// (실측: 320에서 "괜찮은데? 괜찮은데?…" 류 반복 폭증) — 속도가 더 필요할 때만 env 로 낮출 것.
+/// 6초=~300 인코더프레임이므로 300 미만이면 실오디오가 잘린다. env Q5_AUDIO_CTX.
+fn q5_windowed_audio_ctx() -> i32 {
+    std::env::var("Q5_AUDIO_CTX")
+        .ok()
+        .and_then(|v| v.trim().parse::<i32>().ok())
+        .filter(|v| *v > 0)
+        .unwrap_or(512)
+}
+
+/// 윈도우 Q5 디코드 temperature 증가폭(폴백). >0 이면 whisper 가 반복/저신뢰 세그먼트를
+/// compression-ratio/entropy 로 감지해 더 높은 temperature 로 재디코드 → 반복 환각 루프를
+/// 탈출한다(현실 회의/캐주얼 음성에서 중요). 0 이면 폴백 없음(가장 빠르나 루프에 빠지면
+/// 못 빠져나옴). Metal 가속으로 재디코드 비용을 감당할 수 있으므로 기본 0.2. env Q5_TEMP_INC.
+fn q5_temp_inc() -> f32 {
+    std::env::var("Q5_TEMP_INC")
+        .ok()
+        .and_then(|v| v.trim().parse::<f32>().ok())
+        .filter(|v| v.is_finite() && *v >= 0.0)
+        .unwrap_or(0.2)
 }
 
 fn normalized_language(lang: Option<String>) -> Option<String> {
@@ -799,11 +882,17 @@ impl StreamingAsrBackend for WhisperAdaptiveBackend {
     }
 }
 
+// MIN/STEP/MAX/HOLDBACK/BACKLOG/MAX_LAG 은 WhisperWindowedBackend 의 기본값으로,
+// 각각 Q5_WIN_MIN_SEC/STEP_SEC/MAX_SEC/HOLDBACK/BACKLOG_SEC/MAX_LAG_SEC env 로 재빌드 없이 덮어쓸 수 있다.
 const WINDOWED_Q5_MIN_SEC: f64 = 5.0;
 const WINDOWED_Q5_STEP_SEC: f64 = 2.0;
 const WINDOWED_Q5_MAX_SEC: f64 = 6.0;
 const WINDOWED_Q5_BACKLOG_SEC: f64 = 120.0;
 const WINDOWED_Q5_HOLDBACK_WORDS: usize = 1;
+/// 라이브 디코드가 이만큼(초) 이상 실시간보다 뒤처지면 최신 윈도우로 점프해 따라잡는다
+/// (중간 구간 누락). 느린 디코드에도 라이브가 '지금'을 따라가고, 정지 시 밀린 백로그를
+/// 길게 토해내지 않게 하는 상한. 0 이면 비활성.
+const WINDOWED_Q5_MAX_LAG_SEC: f64 = 6.0;
 const WINDOWED_Q5_DUP_MIN_WORDS: usize = 4;
 const WINDOWED_Q5_GAP_DIAG_SEC: f64 = 1.25;
 const WINDOWED_Q5_ACTIVE_RMS: f32 = 0.0015;
@@ -824,6 +913,18 @@ struct WhisperWindowedBackend {
     buffer: String,
     last_committed_end: f64,
     committed_norm_words: Vec<String>,
+    // 라이브 지연 튜닝 노브(기본값=위 상수). 재빌드 없이 env로 스윕 가능:
+    //   Q5_WIN_MIN_SEC   첫 디코드까지 누적해야 할 오디오(첫 토큰 바닥). ↓이면 더 빨리 뜨나 짧은 첫 윈도우 환각 위험.
+    //   Q5_WIN_STEP_SEC  확정 전진 간격(케이던스). ↓이면 더 자주 확정/partial 갱신, 단 디코드 부하↑(I<STEP 유지 필요).
+    //   Q5_WIN_MAX_SEC   디코드 윈도우 길이(문맥 span). 보통 6 유지.
+    //   Q5_WIN_HOLDBACK  윈도우 끝에서 보류할 단어 수(가장자리 흔들림 가림). 0이면 확정 지연↓·깜빡임 위험.
+    //   Q5_WIN_MAX_LAG_SEC  라이브가 이만큼 뒤처지면 최신으로 점프(중간 누락). 정지 즉시성·라이브성 보장.
+    min_sec: f64,
+    step_sec: f64,
+    max_sec: f64,
+    holdback_words: usize,
+    backlog_sec: f64,
+    max_lag_sec: f64,
 }
 
 impl WhisperWindowedBackend {
@@ -838,6 +939,16 @@ impl WhisperWindowedBackend {
             buffer: String::new(),
             last_committed_end: 0.0,
             committed_norm_words: Vec::new(),
+            min_sec: env_f64("Q5_WIN_MIN_SEC").unwrap_or(WINDOWED_Q5_MIN_SEC),
+            step_sec: env_f64("Q5_WIN_STEP_SEC").unwrap_or(WINDOWED_Q5_STEP_SEC),
+            max_sec: env_f64("Q5_WIN_MAX_SEC").unwrap_or(WINDOWED_Q5_MAX_SEC),
+            holdback_words: env_usize("Q5_WIN_HOLDBACK").unwrap_or(WINDOWED_Q5_HOLDBACK_WORDS),
+            backlog_sec: env_f64("Q5_WIN_BACKLOG_SEC").unwrap_or(WINDOWED_Q5_BACKLOG_SEC),
+            max_lag_sec: std::env::var("Q5_WIN_MAX_LAG_SEC")
+                .ok()
+                .and_then(|v| v.trim().parse::<f64>().ok())
+                .filter(|v| v.is_finite() && *v >= 0.0)
+                .unwrap_or(WINDOWED_Q5_MAX_LAG_SEC),
         }
     }
 
@@ -881,7 +992,7 @@ impl WhisperWindowedBackend {
         let commit_hi = if is_last {
             words.len()
         } else {
-            words.len().saturating_sub(WINDOWED_Q5_HOLDBACK_WORDS)
+            words.len().saturating_sub(self.holdback_words)
         };
         if commit_hi <= overlap {
             self.buffer = words_to_text(&words[overlap..]);
@@ -982,20 +1093,29 @@ impl WhisperWindowedBackend {
         }
         let available_end = self.audio_offset + self.audio.len() as f64 / 16_000.0;
         let scheduled_end = if self.last_decode_end <= 0.0 {
-            self.audio_offset + WINDOWED_Q5_MIN_SEC
+            self.audio_offset + self.min_sec
         } else {
-            self.last_decode_end + WINDOWED_Q5_STEP_SEC
+            self.last_decode_end + self.step_sec
         };
 
-        let window_end = if scheduled_end <= available_end + 0.001 {
+        let mut window_end = if scheduled_end <= available_end + 0.001 {
             scheduled_end
         } else if is_last && available_end > self.last_decode_end + 0.25 {
             available_end
         } else {
             return None;
         };
-        let window_start = (window_end - WINDOWED_Q5_MAX_SEC).max(self.audio_offset);
-        if !is_last && window_end - window_start < WINDOWED_Q5_MIN_SEC - 0.001 {
+        // 라이브 백로그 상한: 디코드가 max_lag 이상 뒤처지면 최신 윈도우로 점프(중간 구간 누락).
+        // 느린 디코드(temperature 폴백/저사양)에도 라이브가 '지금'을 따라가고, 정지 시 잔여
+        // 백로그를 길게 토해내지 않게 한다. 따라잡고 있으면(lag<max_lag) 발동하지 않음.
+        if !is_last
+            && self.max_lag_sec > 0.0
+            && available_end - self.last_decode_end > self.max_lag_sec
+        {
+            window_end = available_end;
+        }
+        let window_start = (window_end - self.max_sec).max(self.audio_offset);
+        if !is_last && window_end - window_start < self.min_sec - 0.001 {
             return None;
         }
 
@@ -1018,7 +1138,7 @@ impl WhisperWindowedBackend {
 
     fn prune_audio(&mut self) {
         let future_start = if self.last_decode_end > 0.0 {
-            self.last_decode_end + WINDOWED_Q5_STEP_SEC - WINDOWED_Q5_MAX_SEC
+            self.last_decode_end + self.step_sec - self.max_sec
         } else {
             self.audio_offset
         };
@@ -1031,7 +1151,7 @@ impl WhisperWindowedBackend {
             self.audio_offset += drop_samples as f64 / 16_000.0;
         }
 
-        let max_samples = (WINDOWED_Q5_BACKLOG_SEC * 16_000.0) as usize;
+        let max_samples = (self.backlog_sec * 16_000.0) as usize;
         if self.audio.len() > max_samples {
             let extra = self.audio.len() - max_samples;
             self.audio.drain(..extra);
@@ -1073,6 +1193,15 @@ impl StreamingAsrBackend for WhisperWindowedBackend {
     async fn process_iter(&mut self, is_last: bool) -> Result<Vec<AsrToken>, AsrError> {
         if !is_last {
             return self.run_window(false);
+        }
+
+        // 정지 즉시성: 밀린 백로그를 전부 재전사하지 않는다 — 그게 '정지 후에도 계속 인식되는'
+        // 원인이다(느린 디코드로 self.audio 가 최대 backlog_sec 까지 쌓인 뒤 종료 시 한꺼번에 토함).
+        // 가장 최근 한 윈도우(≤max_sec)만 확정하고 그 이전 미처리 구간은 버린다.
+        let available_end = self.audio_offset + self.audio.len() as f64 / 16_000.0;
+        let final_floor = (available_end - self.step_sec).max(0.0);
+        if final_floor > self.last_decode_end {
+            self.last_decode_end = final_floor;
         }
 
         let mut out = Vec::new();

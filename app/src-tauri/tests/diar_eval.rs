@@ -78,6 +78,7 @@ async fn diarization_eval() {
             diarizer,
             None,
             reset,
+            std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
         )
         .await;
     });

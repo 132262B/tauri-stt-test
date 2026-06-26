@@ -13,10 +13,14 @@ use crate::capture::CaptureControl;
 pub struct SessionHandle {
     captures: Vec<CaptureControl>,
     stop_flag: Arc<AtomicBool>,
+    driver_stop: Arc<AtomicBool>,
 }
 
 impl SessionHandle {
     pub fn stop(self) {
+        // 드라이버에 즉시 정지 신호: 더 이상 오디오를 흡수/처리하지 않는다(버퍼 잔여도 버림).
+        // 캡처가 채널을 닫기 전에 먼저 세워, '정지=즉시 전사 중단'을 보장.
+        self.driver_stop.store(true, Ordering::Relaxed);
         self.stop_flag.store(false, Ordering::Relaxed);
         for c in self.captures {
             c.stop();
@@ -81,6 +85,8 @@ pub fn start(
     let model = model_id.clone();
     let metrics = SessionMetrics::default();
     let running = Arc::new(AtomicBool::new(true));
+    // 정지 시 드라이버를 즉시 멈추는 신호(흡수/처리 중단).
+    let driver_stop = Arc::new(AtomicBool::new(false));
 
     // 캡처(std mpsc) → 브리지 → run_session(tokio mpsc) → emit
     let (af_tx, af_rx) = std_mpsc::channel::<AudioFrame>();
@@ -126,12 +132,6 @@ pub fn start(
     let crate_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let backend: Box<dyn StreamingAsrBackend> = if model_id == "sensevoice" {
         asr_sense::streaming_backend(crate_dir.join("models/sense"), cfg.language.clone())?
-    } else if model_id == "qwen-1.7b" || model_id == "qwen3-asr-1.7b" {
-        asr_qwen::streaming_backend(
-            crate_dir.join("models/qwen-1.7b"),
-            &asr_qwen::QWEN_17B,
-            cfg.language.clone(),
-        )?
     } else if model_id == "qwen" || model_id.starts_with("qwen3-asr") {
         asr_qwen::streaming_backend(
             crate_dir.join("models/qwen"),
@@ -171,6 +171,7 @@ pub fn start(
 
     let metrics_for_driver = metrics.clone();
     let reset_for_driver = reset.clone();
+    let stop_for_driver = driver_stop.clone();
     tauri::async_runtime::spawn(async move {
         if let Err(e) = run_session(
             backend,
@@ -181,6 +182,7 @@ pub fn start(
             diarizer,
             vad,
             reset_for_driver,
+            stop_for_driver,
         )
         .await
         {
@@ -286,5 +288,6 @@ pub fn start(
     Ok(SessionHandle {
         captures,
         stop_flag: running,
+        driver_stop,
     })
 }

@@ -39,7 +39,7 @@ pub fn start(
 ) -> Result<SessionHandle, String> {
     use std::path::PathBuf;
     use std::sync::mpsc as std_mpsc;
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
 
     use tauri::Emitter;
     use tokio::sync::mpsc;
@@ -53,14 +53,21 @@ pub fn start(
 
     use crate::capture::{mic_cpal, AudioFrame};
 
+    // 사용자가 "전사 시작"을 누른 시점을 세션 0초로 둔다. 캡처 스트림이 실제로
+    // 뜨기까지 걸린 준비 시간도 transcript timestamp 에 반영된다.
+    let started_at = Instant::now();
+
     // 새 세션이므로 이전 전사 누적 초기화.
     if let Ok(mut g) = transcript_log.lock() {
         g.clear();
     }
 
-    // 기본 = Whisper base(빠르고 작음). turbo/large-v3 도 whisper-rs 0.16 에서 정상 동작
-    // (단, 첫 선택 시 1.5~3.1GB 다운로드). 사용자가 모델을 고르면 그대로 사용.
-    let model_id = model_id.unwrap_or_else(|| "ggml-base".to_string());
+    // Whisper 계열은 Q5_0 하나만 앱에서 사용한다. Qwen/SenseVoice 등 비-Whisper
+    // 백엔드는 유지하되, 숨겨진 호출로 다른 ggml 모델이 들어오면 거부한다.
+    let model_id = model_id.unwrap_or_else(|| "ggml-large-v3-turbo-q5_0".to_string());
+    if model_id.starts_with("ggml-") && model_id != "ggml-large-v3-turbo-q5_0" {
+        return Err(format!("지원하지 않는 Whisper 모델입니다: {model_id}"));
+    }
     let cfg = AsrConfig {
         model_id: model_id.clone(),
         language: lang,
@@ -86,6 +93,7 @@ pub fn start(
     std::thread::spawn(move || {
         let mut acc = 0f32;
         let mut cnt = 0usize;
+        let mut time_offset: Option<f64> = None;
         while let Ok(frame) = af_rx.recv() {
             for &s in &frame.samples {
                 acc += s * s;
@@ -97,10 +105,12 @@ pub fn start(
                 acc = 0.0;
                 cnt = 0;
             }
+            let offset = *time_offset
+                .get_or_insert_with(|| (started_at.elapsed().as_secs_f64() - frame.t_end).max(0.0));
             if pcm_tx
                 .blocking_send(AudioChunk {
                     samples: frame.samples,
-                    t_end: frame.t_end,
+                    t_end: frame.t_end + offset,
                 })
                 .is_err()
             {

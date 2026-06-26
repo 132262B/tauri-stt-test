@@ -261,7 +261,10 @@ impl<B: SelfStreamingBackend> StreamingAsrBackend for SelfStreamingProcessor<B> 
         self.backend.warmup()
     }
 
-    fn insert_audio_chunk(&mut self, pcm: &[f32], _end_time: f64) {
+    fn insert_audio_chunk(&mut self, pcm: &[f32], end_time: f64) {
+        if self.audio.is_empty() {
+            self.offset = (end_time - pcm.len() as f64 / SR).max(0.0);
+        }
         self.audio.extend_from_slice(pcm);
     }
 
@@ -325,6 +328,18 @@ mod tests {
         let text = toks.iter().map(|t| t.text.as_str()).collect::<String>();
 
         assert_eq!(text, "hello world");
+    }
+
+    #[tokio::test]
+    async fn token_times_use_stream_end_time() {
+        let mut proc = SelfStreamingProcessor::new(MockBackend);
+        proc.configure(&AsrConfig::default()).await.unwrap();
+        proc.insert_audio_chunk(&vec![0.1; 16_000], 6.0);
+
+        let toks = proc.process_iter(true).await.unwrap();
+
+        assert!((toks.first().unwrap().start - 5.0).abs() < 0.001);
+        assert!((toks.last().unwrap().end - 6.0).abs() < 0.001);
     }
 
     #[tokio::test]

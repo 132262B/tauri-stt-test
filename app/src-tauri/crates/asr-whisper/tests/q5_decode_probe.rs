@@ -62,7 +62,7 @@ fn q5_decode_probe() {
 fn q5_prefix_probe() {
     let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let model = q5_model_path(&base);
-    let audio = read_wav(&base.join("test-data/meeting.wav"));
+    let audio = read_wav(&probe_audio_path(&base));
     let opts = WhisperDecodeOptions::for_windowed_q5();
     let be = WhisperRsBackend::load_with_options(&model, None, opts).expect("load");
 
@@ -84,7 +84,7 @@ fn q5_prefix_probe() {
 fn q5_slice_probe() {
     let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let model = q5_model_path(&base);
-    let audio = read_wav(&base.join("test-data/meeting.wav"));
+    let audio = read_wav(&probe_audio_path(&base));
     let opts = WhisperDecodeOptions::for_windowed_q5();
     let be = WhisperRsBackend::load_with_options(&model, None, opts).expect("load");
 
@@ -110,7 +110,7 @@ fn q5_slice_probe() {
 fn q5_latency_probe() {
     let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let model = q5_model_path(&base);
-    let audio = read_wav(&base.join("test-data/meeting.wav"));
+    let audio = read_wav(&probe_audio_path(&base));
     let opts = WhisperDecodeOptions::for_windowed_q5();
     let be = WhisperRsBackend::load_with_options(&model, None, opts).expect("load");
 
@@ -140,11 +140,17 @@ fn q5_model_path(base: &std::path::Path) -> PathBuf {
         .unwrap_or_else(|_| base.join("models/ggml/ggml-large-v3-turbo-q5_0.bin"))
 }
 
+fn probe_audio_path(base: &std::path::Path) -> PathBuf {
+    std::env::var("AUDIO_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| base.join("test-data/meeting.wav"))
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 #[ignore = "Q5_0 모델 + CoreML encoder 필요"]
 async fn q5_streaming_backlog_smoke() {
     let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let audio = read_wav(&base.join("test-data/meeting.wav"));
+    let audio = read_wav(&probe_audio_path(&base));
     let mut backend = asr_whisper::self_streaming_backend(base.join("models/ggml"));
     backend
         .configure(&AsrConfig {

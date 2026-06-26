@@ -108,11 +108,13 @@ pub async fn run_session(
             let elapsed_ms = t0.elapsed().as_secs_f32() * 1000.0;
             metrics.record_iter(elapsed_ms, audio_sec);
             let buffer = backend.get_buffer();
-            eprintln!(
-                "[asr] iter audio={audio_sec:.2}s took={elapsed_ms:.0}ms committed={} buffer_chars={}",
-                committed.len(),
-                buffer.chars().count()
-            );
+            if trace_asr_iters() {
+                eprintln!(
+                    "[asr] iter audio={audio_sec:.2}s took={elapsed_ms:.0}ms committed={} buffer_chars={}",
+                    committed.len(),
+                    buffer.chars().count()
+                );
+            }
             all_tokens.extend(committed.iter().cloned());
             for t in &committed {
                 committed_text.push_str(&t.text);
@@ -255,6 +257,12 @@ fn to_committed(tokens: &[AsrToken]) -> Vec<CommittedToken> {
             speaker: t.speaker,
         })
         .collect()
+}
+
+fn trace_asr_iters() -> bool {
+    std::env::var("ASR_TRACE")
+        .ok()
+        .is_some_and(|v| matches!(v.as_str(), "1" | "true" | "TRUE" | "yes" | "on"))
 }
 
 #[cfg(test)]

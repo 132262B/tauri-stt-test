@@ -30,18 +30,11 @@ interface Metrics {
   model: string;
 }
 
-// 교체 가능한 ASR 백엔드/모델. 라벨에 엔진명을 명시(테스트 앱: 백엔드별 속도/메모리 비교).
-// 전부 Rust 네이티브(whisper.cpp/Metal, in-process). Python/Node 런타임 0.
 const MODELS: { id: string; label: string }[] = [
-  { id: "ggml-base", label: "Whisper · base (141M · 권장·빠름)" },
-  { id: "qwen", label: "Qwen3-ASR · 0.6B (한국어 고정확 · Rust 네이티브 · 첫 선택 시 1.7G)" },
-  { id: "qwen-1.7b", label: "Qwen3-ASR · 1.7B (최고정확 다국어 · Rust 네이티브 · 첫 선택 시 4.4G)" },
-  { id: "ggml-small", label: "Whisper · small (466M)" },
-  { id: "sensevoice", label: "SenseVoice · 다국어(한·영·일·중)" },
-  { id: "ggml-tiny", label: "Whisper · tiny (75M · 가장 빠름)" },
-  { id: "ggml-large-v3-turbo-q5_0", label: "Whisper · turbo Q5_0 (574M · turbo 양자화·고정확·경량)" },
-  { id: "ggml-large-v3-turbo", label: "Whisper · turbo (1.5G · 고정확·첫 선택 시 다운로드)" },
-  { id: "ggml-large-v3", label: "Whisper · large-v3 (3.1G · 최고정확·첫 선택 시 다운로드)" },
+  { id: "ggml-large-v3-turbo-q5_0", label: "Whisper · turbo Q5_0" },
+  { id: "qwen", label: "Qwen3-ASR · 0.6B" },
+  { id: "qwen-1.7b", label: "Qwen3-ASR · 1.7B" },
+  { id: "sensevoice", label: "SenseVoice · 다국어" },
 ];
 
 const SPEAKER_COLORS = ["#2e7d32", "#1565c0", "#c2185b", "#e67e22", "#6a1b9a", "#00838f"];
@@ -61,9 +54,11 @@ function fmtTime(sec: number): string {
 function App() {
   const [ipc, setIpc] = useState("연결 확인 중…");
   const [running, setRunning] = useState(false);
+  const [starting, setStarting] = useState(false);
   const [err, setErr] = useState("");
   const [lines, setLines] = useState<TranscriptLine[]>([]);
   const [buffer, setBuffer] = useState("");
+  const [elapsedSec, setElapsedSec] = useState(0);
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [model, setModel] = useState("ggml-large-v3-turbo-q5_0");
   const [lang, setLang] = useState(""); // "" = 자동
@@ -74,6 +69,7 @@ function App() {
   const [diarizing, setDiarizing] = useState(false);
   const [level, setLevel] = useState(0); // 입력 RMS (0..~0.3)
   const bottomRef = useRef<HTMLDivElement>(null);
+  const startedAtRef = useRef<number | null>(null);
 
   useEffect(() => {
     invoke<string>("ping")
@@ -109,13 +105,26 @@ function App() {
   }, []);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    bottomRef.current?.scrollIntoView({ behavior: "auto" });
   }, [lines, buffer]);
+
+  useEffect(() => {
+    if (!running && !starting) return;
+    const tick = () => {
+      if (startedAtRef.current == null) return;
+      setElapsedSec((performance.now() - startedAtRef.current) / 1000);
+    };
+    tick();
+    const id = window.setInterval(tick, 250);
+    return () => window.clearInterval(id);
+  }, [running, starting]);
 
   async function reset() {
     setErr("");
     setLines([]);
     setBuffer("");
+    setElapsedSec(0);
+    startedAtRef.current = null;
     setDiarizing(false);
     try {
       await invoke("clear_transcript");
@@ -166,6 +175,7 @@ function App() {
   }
 
   async function toggle() {
+    if (starting) return;
     setErr("");
     try {
       if (running) {
@@ -180,18 +190,29 @@ function App() {
           setErr(permErr);
           return;
         }
+        startedAtRef.current = performance.now();
+        setElapsedSec(0);
+        setStarting(true);
         setLines([]);
         setBuffer("");
         setDiarizing(false);
         await invoke("start_session", { model, lang, input, device, diarize });
+        setStarting(false);
         setRunning(true);
       }
     } catch (e) {
+      setStarting(false);
+      if (!running) {
+        startedAtRef.current = null;
+        setElapsedSec(0);
+      }
       setErr(String(e));
     }
   }
 
   const hasContent = lines.length > 0 || buffer.length > 0;
+  const active = running || starting;
+  const showElapsed = active || elapsedSec > 0;
 
   return (
     <div className="app">
@@ -203,11 +224,16 @@ function App() {
         <section className="pane transcript-pane">
           <h2>
             전사
+            {showElapsed && <span className="elapsed-clock">경과 {fmtTime(elapsedSec)}</span>}
             {diarizing && <span className="diar-status">화자 라벨링 중...</span>}
           </h2>
           {!hasContent && (
             <p className="placeholder">
-              {running ? "듣는 중… 말하면 화자별 전사가 나타납니다." : "마이크 캡처를 시작하세요."}
+              {starting
+                ? "전사 준비 중..."
+                : running
+                  ? "듣는 중… 말하면 화자별 전사가 나타납니다."
+                  : "마이크 캡처를 시작하세요."}
             </p>
           )}
           <div className="transcript">
@@ -252,7 +278,7 @@ function App() {
             <h2>컨트롤</h2>
             <label className="field">
               <span>모델</span>
-              <select value={model} onChange={(e) => setModel(e.target.value)} disabled={running}>
+              <select value={model} onChange={(e) => setModel(e.target.value)} disabled={active}>
                 {MODELS.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.label}
@@ -262,7 +288,7 @@ function App() {
             </label>
             <label className="field">
               <span>언어</span>
-              <select value={lang} onChange={(e) => setLang(e.target.value)} disabled={running}>
+              <select value={lang} onChange={(e) => setLang(e.target.value)} disabled={active}>
                 <option value="">자동 감지 (한·영 혼용)</option>
                 <option value="ko">한국어 고정</option>
                 <option value="en">영어 고정</option>
@@ -270,7 +296,7 @@ function App() {
             </label>
             <label className="field">
               <span>입력 소스</span>
-              <select value={input} onChange={(e) => setInput(e.target.value)} disabled={running}>
+              <select value={input} onChange={(e) => setInput(e.target.value)} disabled={active}>
                 <option value="file">🎬 파일 데모 (마이크 없이 회의 음성 전사 테스트)</option>
                 <option value="mic">마이크</option>
                 <option value="system">시스템 오디오 (회의 소리·화면녹화 권한)</option>
@@ -280,7 +306,7 @@ function App() {
             {(input === "mic" || input === "both") && (
               <label className="field">
                 <span>입력 장치 (마이크 / BlackHole 등 출력캡처)</span>
-                <select value={device} onChange={(e) => setDevice(e.target.value)} disabled={running}>
+                <select value={device} onChange={(e) => setDevice(e.target.value)} disabled={active}>
                   <option value="">기본 장치</option>
                   {devices.map((d) => (
                     <option key={d} value={d}>
@@ -295,13 +321,13 @@ function App() {
                 type="checkbox"
                 checked={diarize}
                 onChange={(e) => setDiarize(e.target.checked)}
-                disabled={running}
+                disabled={active}
               />
               <span>화자 분리 (끄면 “시간 ~ 시간 · 텍스트”로 표시)</span>
             </label>
             <div className="btn-row">
-              <button onClick={toggle} className={running ? "stop" : "start"}>
-                {running ? "■ 전사 정지" : "● 전사 시작"}
+              <button onClick={toggle} className={running ? "stop" : "start"} disabled={starting}>
+                {starting ? "전사 준비 중..." : running ? "■ 전사 정지" : "● 전사 시작"}
               </button>
               <button onClick={reset} className="reset" title="화면/누적 전사 비우기">
                 ↺ 초기화

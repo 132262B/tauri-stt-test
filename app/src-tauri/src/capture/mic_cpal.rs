@@ -84,10 +84,12 @@ fn build_and_play(
         let dur = out.len() as f64 / TARGET_SR as f64;
         let t_start = t_cursor;
         t_cursor += dur;
-        eprintln!(
-            "[capture] 16k {}샘플 rms={rms:.4} t={t_start:.2}s",
-            out.len()
-        );
+        if capture_verbose() {
+            eprintln!(
+                "[capture] 16k {}샘플 rms={rms:.4} t={t_start:.2}s",
+                out.len()
+            );
+        }
         let _ = tx.send(AudioFrame {
             samples: out,
             t_start,
@@ -144,4 +146,10 @@ fn downmix(interleaved: &[f32], channels: usize) -> Vec<f32> {
             .map(|frame| frame.iter().sum::<f32>() / channels as f32)
             .collect()
     }
+}
+
+fn capture_verbose() -> bool {
+    std::env::var("ASR_CAPTURE_VERBOSE")
+        .ok()
+        .is_some_and(|v| matches!(v.as_str(), "1" | "true" | "TRUE" | "yes" | "on"))
 }

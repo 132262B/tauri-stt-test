@@ -799,11 +799,11 @@ impl StreamingAsrBackend for WhisperAdaptiveBackend {
     }
 }
 
-const WINDOWED_Q5_MIN_SEC: f64 = 8.0;
-const WINDOWED_Q5_STEP_SEC: f64 = 5.0;
-const WINDOWED_Q5_MAX_SEC: f64 = 8.0;
+const WINDOWED_Q5_MIN_SEC: f64 = 5.0;
+const WINDOWED_Q5_STEP_SEC: f64 = 2.0;
+const WINDOWED_Q5_MAX_SEC: f64 = 6.0;
 const WINDOWED_Q5_BACKLOG_SEC: f64 = 120.0;
-const WINDOWED_Q5_HOLDBACK_WORDS: usize = 2;
+const WINDOWED_Q5_HOLDBACK_WORDS: usize = 1;
 const WINDOWED_Q5_DUP_MIN_WORDS: usize = 4;
 const WINDOWED_Q5_GAP_DIAG_SEC: f64 = 1.25;
 const WINDOWED_Q5_ACTIVE_RMS: f32 = 0.0015;
@@ -855,7 +855,9 @@ impl WhisperWindowedBackend {
         if words.is_empty() {
             self.buffer.clear();
             self.prune_audio();
-            eprintln!("[asr:q5-window] window={window_start:.1}-{window_end:.1}s empty");
+            if trace_q5_windows() {
+                eprintln!("[asr:q5-window] window={window_start:.1}-{window_end:.1}s empty");
+            }
             return Ok(Vec::new());
         }
 
@@ -867,10 +869,12 @@ impl WhisperWindowedBackend {
         {
             self.buffer = words_to_text(&words);
             self.prune_audio();
-            eprintln!(
-                "[asr:q5-window] window={window_start:.1}-{window_end:.1}s no-overlap committed=0 buffer_words={}",
-                words.len()
-            );
+            if trace_q5_windows() {
+                eprintln!(
+                    "[asr:q5-window] window={window_start:.1}-{window_end:.1}s no-overlap committed=0 buffer_words={}",
+                    words.len()
+                );
+            }
             return Ok(Vec::new());
         }
 
@@ -882,10 +886,12 @@ impl WhisperWindowedBackend {
         if commit_hi <= overlap {
             self.buffer = words_to_text(&words[overlap..]);
             self.prune_audio();
-            eprintln!(
-                "[asr:q5-window] window={window_start:.1}-{window_end:.1}s overlap={overlap} committed=0 buffer_words={}",
-                words.len().saturating_sub(overlap)
-            );
+            if trace_q5_windows() {
+                eprintln!(
+                    "[asr:q5-window] window={window_start:.1}-{window_end:.1}s overlap={overlap} committed=0 buffer_words={}",
+                    words.len().saturating_sub(overlap)
+                );
+            }
             return Ok(Vec::new());
         }
 
@@ -922,15 +928,17 @@ impl WhisperWindowedBackend {
                 } else {
                     "silence"
                 };
-                eprintln!(
-                    "[asr:q5-gap] kind={kind} gap={:.2}s abs={:.1}-{:.1}s rms={:.5} active={:.0}% skipped_dup={}",
-                    start - self.last_committed_end,
-                    self.last_committed_end,
-                    start,
-                    activity.rms,
-                    activity.active_ratio * 100.0,
-                    skipped_dup_words
-                );
+                if trace_q5_windows() {
+                    eprintln!(
+                        "[asr:q5-gap] kind={kind} gap={:.2}s abs={:.1}-{:.1}s rms={:.5} active={:.0}% skipped_dup={}",
+                        start - self.last_committed_end,
+                        self.last_committed_end,
+                        start,
+                        activity.rms,
+                        activity.active_ratio * 100.0,
+                        skipped_dup_words
+                    );
+                }
                 if skipped_since_last_commit && active {
                     start = self.last_committed_end + 0.05;
                 }
@@ -956,13 +964,15 @@ impl WhisperWindowedBackend {
         }
         self.buffer = words_to_text(&words[commit_hi..]);
         self.prune_audio();
-        eprintln!(
-            "[asr:q5-window] window={window_start:.1}-{window_end:.1}s overlap={overlap} committed={} skipped_dup={} buffer_words={} text={:?}",
-            committed.len(),
-            skipped_dup_words,
-            words.len().saturating_sub(commit_hi),
-            text.chars().take(120).collect::<String>()
-        );
+        if trace_q5_windows() {
+            eprintln!(
+                "[asr:q5-window] window={window_start:.1}-{window_end:.1}s overlap={overlap} committed={} skipped_dup={} buffer_words={} text={:?}",
+                committed.len(),
+                skipped_dup_words,
+                words.len().saturating_sub(commit_hi),
+                text.chars().take(120).collect::<String>()
+            );
+        }
         Ok(committed)
     }
 
@@ -1213,6 +1223,10 @@ fn words_to_text(words: &[WindowWord]) -> String {
         .map(|word| word.text.as_str())
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+fn trace_q5_windows() -> bool {
+    env_bool("ASR_Q5_TRACE").unwrap_or(false)
 }
 
 /// ggml 모델 디렉터리로부터 Whisper StreamingAsrBackend 를 만든다.

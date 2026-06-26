@@ -89,6 +89,16 @@ body {
   text-transform: none;
 }
 
+.elapsed-clock {
+  color: #44505c;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
 .panel {
   border: 1px solid #e2e2e2;
   border-radius: 8px;

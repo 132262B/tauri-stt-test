@@ -7,10 +7,10 @@
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
+use asr_core::asr::SelfStreamingBackend;
 use asr_qwen::{QwenBackend, QWEN_06B, QWEN_17B};
 use asr_sense::SenseVoiceBackend;
 use asr_whisper::WhisperRsBackend;
-use asr_core::asr::SelfStreamingBackend;
 
 const SR: usize = 16_000;
 const OUT_DIR: &str = "/private/tmp/claude-501/-Users-kwonjunho-Desktop-work-tauri-stt-test/68e638b0-f4c7-4dbb-ba6f-f5c9ca7534ca/scratchpad/sweep";
@@ -78,7 +78,9 @@ fn cer(reference: &[char], hyp: &str) -> f64 {
 
 fn load_audio(wav: &Path) -> Vec<f32> {
     let mut r = hound::WavReader::open(wav).expect("wav");
-    r.samples::<i16>().map(|s| s.unwrap() as f32 / 32768.0).collect()
+    r.samples::<i16>()
+        .map(|s| s.unwrap() as f32 / 32768.0)
+        .collect()
 }
 
 /// 한 모델 결과 한 줄.
@@ -119,8 +121,16 @@ fn model_sweep() {
         ("ggml-tiny", "tiny 75M", "models/ggml/ggml-tiny.bin"),
         ("ggml-base", "base 141M", "models/ggml/ggml-base.bin"),
         ("ggml-small", "small 466M", "models/ggml/ggml-small.bin"),
-        ("ggml-large-v3-turbo", "turbo 1.5G", "models/ggml/ggml-large-v3-turbo.bin"),
-        ("ggml-large-v3", "large-v3 3.1G", "models/ggml/ggml-large-v3.bin"),
+        (
+            "ggml-large-v3-turbo",
+            "turbo 1.5G",
+            "models/ggml/ggml-large-v3-turbo.bin",
+        ),
+        (
+            "ggml-large-v3",
+            "large-v3 3.1G",
+            "models/ggml/ggml-large-v3.bin",
+        ),
     ];
     for (name, params, rel) in whisper_models {
         let mp = base.join(rel);
@@ -227,7 +237,13 @@ fn model_sweep() {
     );
     for r in &rows {
         // 실시간(스트리밍 12~15s 윈도우, 틱 1s): 틱당 추론 = window×RTF < 1s 필요 → RTF<~0.07
-        let rt = if r.rtf < 0.07 { "✅ 여유" } else if r.rtf < 0.15 { "△ 빠듯" } else { "❌ 밀림" };
+        let rt = if r.rtf < 0.07 {
+            "✅ 여유"
+        } else if r.rtf < 0.15 {
+            "△ 빠듯"
+        } else {
+            "❌ 밀림"
+        };
         eprintln!(
             "{:<22} {:<18} {:>9.1} {:>7.3} {:>7.1}% {:>7.1}% {:>10}",
             r.name,

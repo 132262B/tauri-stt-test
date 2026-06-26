@@ -39,7 +39,10 @@ fn korean_autodetect_not_english() {
     let wav = base.join("test-data/ko_test.wav");
     assert!(wav.exists(), "한국어 오디오 없음: {wav:?}");
     let mut reader = hound::WavReader::open(&wav).expect("wav open");
-    let audio: Vec<f32> = reader.samples::<i16>().map(|s| s.unwrap() as f32 / 32768.0).collect();
+    let audio: Vec<f32> = reader
+        .samples::<i16>()
+        .map(|s| s.unwrap() as f32 / 32768.0)
+        .collect();
 
     // language=None → "auto" 감지 경로.
     let backend = WhisperRsBackend::load(&model, None).expect("load");
@@ -54,8 +57,14 @@ fn korean_autodetect_not_english() {
     );
     let text: String = tokens.iter().map(|t| t.text.as_str()).collect();
     eprintln!("=== KO autodetect: {text}");
-    let hangul = text.chars().filter(|c| ('\u{AC00}'..='\u{D7A3}').contains(c)).count();
-    assert!(hangul >= 5, "한글이 거의 없음(영어로 샘) → 자동감지 실패: {text:?}");
+    let hangul = text
+        .chars()
+        .filter(|c| ('\u{AC00}'..='\u{D7A3}').contains(c))
+        .count();
+    assert!(
+        hangul >= 5,
+        "한글이 거의 없음(영어로 샘) → 자동감지 실패: {text:?}"
+    );
 }
 
 /// turbo·large-v3 가 whisper-rs 0.16 에서 로드/전사되는지 검증.
@@ -64,7 +73,10 @@ fn korean_autodetect_not_english() {
 fn turbo_and_large_load() {
     let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let mut r = hound::WavReader::open(base.join("test-data/jfk.wav")).expect("wav");
-    let audio: Vec<f32> = r.samples::<i16>().map(|s| s.unwrap() as f32 / 32768.0).collect();
+    let audio: Vec<f32> = r
+        .samples::<i16>()
+        .map(|s| s.unwrap() as f32 / 32768.0)
+        .collect();
     for name in ["ggml-large-v3-turbo.bin", "ggml-large-v3.bin"] {
         let model = base.join("models/ggml").join(name);
         if !model.exists() {
@@ -76,6 +88,9 @@ fn turbo_and_large_load() {
         let toks = backend.transcribe(&audio, "").expect("transcribe");
         let text: String = toks.iter().map(|t| t.text.as_str()).collect();
         eprintln!("=== {name}: {text}");
-        assert!(text.to_lowercase().contains("country"), "{name} 전사 실패: {text:?}");
+        assert!(
+            text.to_lowercase().contains("country"),
+            "{name} 전사 실패: {text:?}"
+        );
     }
 }

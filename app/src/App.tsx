@@ -17,6 +17,7 @@ interface TranscriptSnapshot {
   buffer: string;
   bufferSpeaker: number | null;
   upto: number;
+  replaceCommitted?: boolean;
 }
 interface Metrics {
   cpuPct: number;
@@ -64,12 +65,13 @@ function App() {
   const [lines, setLines] = useState<TranscriptLine[]>([]);
   const [buffer, setBuffer] = useState("");
   const [metrics, setMetrics] = useState<Metrics | null>(null);
-  const [model, setModel] = useState(MODELS[0].id);
+  const [model, setModel] = useState("ggml-large-v3-turbo-q5_0");
   const [lang, setLang] = useState(""); // "" = 자동
   const [input, setInput] = useState("mic"); // mic | system | both
   const [devices, setDevices] = useState<string[]>([]);
   const [device, setDevice] = useState(""); // "" = 기본 장치
   const [diarize, setDiarize] = useState(true); // 화자 분리 on/off
+  const [diarizing, setDiarizing] = useState(false);
   const [level, setLevel] = useState(0); // 입력 RMS (0..~0.3)
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -90,8 +92,12 @@ function App() {
     const un1 = listen<TranscriptSnapshot>("transcript_update", (e) => {
       setLines(e.payload.lines);
       setBuffer(e.payload.buffer);
+      if (e.payload.replaceCommitted) setDiarizing(false);
     });
-    const un2 = listen("transcript_done", () => setBuffer(""));
+    const un2 = listen("transcript_done", () => {
+      setBuffer("");
+      setDiarizing(false);
+    });
     const un3 = listen<Metrics>("metrics_update", (e) => setMetrics(e.payload));
     const un4 = listen<number>("audio_level", (e) => setLevel(e.payload));
     return () => {
@@ -110,6 +116,7 @@ function App() {
     setErr("");
     setLines([]);
     setBuffer("");
+    setDiarizing(false);
     try {
       await invoke("clear_transcript");
     } catch (e) {
@@ -162,9 +169,11 @@ function App() {
     setErr("");
     try {
       if (running) {
+        const shouldDiarize = diarize;
         await invoke("stop_session");
         setRunning(false);
         setLevel(0);
+        if (shouldDiarize) setDiarizing(true);
       } else {
         const permErr = await ensurePermissions();
         if (permErr) {
@@ -173,6 +182,7 @@ function App() {
         }
         setLines([]);
         setBuffer("");
+        setDiarizing(false);
         await invoke("start_session", { model, lang, input, device, diarize });
         setRunning(true);
       }
@@ -191,7 +201,10 @@ function App() {
       </header>
       <main className="app-body">
         <section className="pane transcript-pane">
-          <h2>전사</h2>
+          <h2>
+            전사
+            {diarizing && <span className="diar-status">화자 라벨링 중...</span>}
+          </h2>
           {!hasContent && (
             <p className="placeholder">
               {running ? "듣는 중… 말하면 화자별 전사가 나타납니다." : "마이크 캡처를 시작하세요."}
@@ -221,9 +234,15 @@ function App() {
           {lines.length > 0 && (
             <div className="export-bar">
               <span>내보내기:</span>
-              <button onClick={() => exportAs("txt")}>txt</button>
-              <button onClick={() => exportAs("srt")}>srt</button>
-              <button onClick={() => exportAs("json")}>json</button>
+              <button onClick={() => exportAs("txt")} disabled={diarizing}>
+                txt
+              </button>
+              <button onClick={() => exportAs("srt")} disabled={diarizing}>
+                srt
+              </button>
+              <button onClick={() => exportAs("json")} disabled={diarizing}>
+                json
+              </button>
             </div>
           )}
           <div ref={bottomRef} />

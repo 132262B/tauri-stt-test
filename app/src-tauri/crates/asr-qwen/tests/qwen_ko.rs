@@ -3,8 +3,8 @@
 
 use std::path::PathBuf;
 
-use asr_qwen::{QwenBackend, QWEN_06B};
 use asr_core::asr::SelfStreamingBackend;
+use asr_qwen::{QwenBackend, QWEN_06B};
 
 #[test]
 #[ignore = "Qwen 모델(1.7G) 필요. --ignored 로 실행"]
@@ -12,7 +12,10 @@ fn qwen_transcribes_korean() {
     let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let model_dir = base.join("models/qwen");
     let wav = base.join("test-data/ko_test.wav");
-    assert!(model_dir.join("model.safetensors").exists(), "Qwen 모델 없음");
+    assert!(
+        model_dir.join("model.safetensors").exists(),
+        "Qwen 모델 없음"
+    );
     assert!(wav.exists(), "한국어 오디오 없음: {wav:?}");
 
     let mut reader = hound::WavReader::open(&wav).expect("wav open");

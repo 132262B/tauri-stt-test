@@ -49,9 +49,21 @@ fn self_attention(x: &Array, w: &Weights, p: &str, n_head: i32) -> Result<Array,
     let dh = d / n_head;
     let scale = (dh as f32).powf(-0.5);
 
-    let q = linear(x, get(w, &format!("{p}.q_proj.weight"))?, w.get(&format!("{p}.q_proj.bias")))?;
-    let k = linear(x, get(w, &format!("{p}.k_proj.weight"))?, w.get(&format!("{p}.k_proj.bias")))?;
-    let v = linear(x, get(w, &format!("{p}.v_proj.weight"))?, w.get(&format!("{p}.v_proj.bias")))?;
+    let q = linear(
+        x,
+        get(w, &format!("{p}.q_proj.weight"))?,
+        w.get(&format!("{p}.q_proj.bias")),
+    )?;
+    let k = linear(
+        x,
+        get(w, &format!("{p}.k_proj.weight"))?,
+        w.get(&format!("{p}.k_proj.bias")),
+    )?;
+    let v = linear(
+        x,
+        get(w, &format!("{p}.v_proj.weight"))?,
+        w.get(&format!("{p}.v_proj.bias")),
+    )?;
 
     let reshape_h = |a: &Array| -> Result<Array, String> {
         a.reshape(&[b, t, n_head, dh])
@@ -71,13 +83,21 @@ fn self_attention(x: &Array, w: &Weights, p: &str, n_head: i32) -> Result<Array,
         .transpose_axes(&[0, 2, 1, 3])
         .and_then(|c| c.reshape(&[b, t, d]))
         .map_err(|e| e.to_string())?;
-    linear(&ctx, get(w, &format!("{p}.out_proj.weight"))?, w.get(&format!("{p}.out_proj.bias")))
+    linear(
+        &ctx,
+        get(w, &format!("{p}.out_proj.weight"))?,
+        w.get(&format!("{p}.out_proj.bias")),
+    )
 }
 
 /// 인코더 forward. mel:[1, n_mels, n_frames]. 반환 [1, n_audio_ctx, d_model].
 pub fn encode(w: &Weights, mel: &Array, n_layers: i32, n_head: i32) -> Result<Array, String> {
-    let conv1_w = get(w, "model.encoder.conv1.weight")?.transpose_axes(&[0, 2, 1]).map_err(|e| e.to_string())?;
-    let conv2_w = get(w, "model.encoder.conv2.weight")?.transpose_axes(&[0, 2, 1]).map_err(|e| e.to_string())?;
+    let conv1_w = get(w, "model.encoder.conv1.weight")?
+        .transpose_axes(&[0, 2, 1])
+        .map_err(|e| e.to_string())?;
+    let conv2_w = get(w, "model.encoder.conv2.weight")?
+        .transpose_axes(&[0, 2, 1])
+        .map_err(|e| e.to_string())?;
     let x = mel.transpose_axes(&[0, 2, 1]).map_err(|e| e.to_string())?;
 
     let x = ops::conv1d(&x, &conv1_w, 1, 1, 1, 1).map_err(|e| format!("conv1: {e}"))?;
@@ -94,14 +114,34 @@ pub fn encode(w: &Weights, mel: &Array, n_layers: i32, n_head: i32) -> Result<Ar
 
     for i in 0..n_layers {
         let p = format!("model.encoder.layers.{i}");
-        let h = layer_norm(&x, get(w, &format!("{p}.self_attn_layer_norm.weight"))?, get(w, &format!("{p}.self_attn_layer_norm.bias"))?)?;
+        let h = layer_norm(
+            &x,
+            get(w, &format!("{p}.self_attn_layer_norm.weight"))?,
+            get(w, &format!("{p}.self_attn_layer_norm.bias"))?,
+        )?;
         let attn = self_attention(&h, w, &format!("{p}.self_attn"), n_head)?;
         x = &x + &attn;
-        let h = layer_norm(&x, get(w, &format!("{p}.final_layer_norm.weight"))?, get(w, &format!("{p}.final_layer_norm.bias"))?)?;
-        let h = linear(&h, get(w, &format!("{p}.fc1.weight"))?, w.get(&format!("{p}.fc1.bias")))?;
+        let h = layer_norm(
+            &x,
+            get(w, &format!("{p}.final_layer_norm.weight"))?,
+            get(w, &format!("{p}.final_layer_norm.bias"))?,
+        )?;
+        let h = linear(
+            &h,
+            get(w, &format!("{p}.fc1.weight"))?,
+            w.get(&format!("{p}.fc1.bias")),
+        )?;
         let h = mlx_rs::nn::gelu(&h).map_err(|e| e.to_string())?;
-        let h = linear(&h, get(w, &format!("{p}.fc2.weight"))?, w.get(&format!("{p}.fc2.bias")))?;
+        let h = linear(
+            &h,
+            get(w, &format!("{p}.fc2.weight"))?,
+            w.get(&format!("{p}.fc2.bias")),
+        )?;
         x = &x + &h;
     }
-    layer_norm(&x, get(w, "model.encoder.layer_norm.weight")?, get(w, "model.encoder.layer_norm.bias")?)
+    layer_norm(
+        &x,
+        get(w, "model.encoder.layer_norm.weight")?,
+        get(w, "model.encoder.layer_norm.bias")?,
+    )
 }

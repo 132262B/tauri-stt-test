@@ -6,8 +6,8 @@
 use std::path::PathBuf;
 use std::time::Instant;
 
-use asr_qwen::{QwenBackend, QWEN_06B, QWEN_17B};
 use asr_core::asr::SelfStreamingBackend;
+use asr_qwen::{QwenBackend, QWEN_06B, QWEN_17B};
 
 const SR: usize = 16_000;
 const OUT_DIR: &str = "/private/tmp/claude-501/-Users-kwonjunho-Desktop-work-tauri-stt-test/68e638b0-f4c7-4dbb-ba6f-f5c9ca7534ca/scratchpad/sweep";
@@ -17,7 +17,10 @@ const OUT_DIR: &str = "/private/tmp/claude-501/-Users-kwonjunho-Desktop-work-tau
 fn qwen_chunked_bench() {
     let base = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut r = hound::WavReader::open(base.join("test-data/meeting.wav")).expect("wav");
-    let audio: Vec<f32> = r.samples::<i16>().map(|s| s.unwrap() as f32 / 32768.0).collect();
+    let audio: Vec<f32> = r
+        .samples::<i16>()
+        .map(|s| s.unwrap() as f32 / 32768.0)
+        .collect();
     let audio_sec = audio.len() as f64 / SR as f64;
     std::fs::create_dir_all(OUT_DIR).ok();
 

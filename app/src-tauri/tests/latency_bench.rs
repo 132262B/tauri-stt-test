@@ -60,7 +60,11 @@ async fn measure(
         avg_ms: avg,
         p95_ms: p95,
         max_ms: max,
-        commit_lag: if lag_n > 0 { lag_sum / lag_n as f64 } else { 0.0 },
+        commit_lag: if lag_n > 0 {
+            lag_sum / lag_n as f64
+        } else {
+            0.0
+        },
         over_rt: over,
         ticks: n,
     })
@@ -71,7 +75,10 @@ async fn measure(
 async fn latency_bench() {
     let base = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut r = hound::WavReader::open(base.join("test-data/meeting.wav")).expect("wav");
-    let audio: Vec<f32> = r.samples::<i16>().map(|s| s.unwrap() as f32 / 32768.0).collect();
+    let audio: Vec<f32> = r
+        .samples::<i16>()
+        .map(|s| s.unwrap() as f32 / 32768.0)
+        .collect();
 
     let ggml = base.join("models/ggml");
     let cfg = |m: &str| AsrConfig {
@@ -105,7 +112,12 @@ async fn latency_bench() {
     // Qwen 은 CPU 라 느림 → 정상상태 수렴에 충분한 짧은 구간으로.
     for (name, dir, spec, sec) in [
         ("qwen-0.6b", "models/qwen", &asr_qwen::QWEN_06B, 45usize),
-        ("qwen-1.7b", "models/qwen-1.7b", &asr_qwen::QWEN_17B, 30usize),
+        (
+            "qwen-1.7b",
+            "models/qwen-1.7b",
+            &asr_qwen::QWEN_17B,
+            30usize,
+        ),
     ] {
         let d = base.join(dir);
         if !d.join("config.json").exists() {

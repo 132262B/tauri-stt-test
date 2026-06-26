@@ -6,8 +6,8 @@
 use std::path::PathBuf;
 use std::time::Instant;
 
-use asr_whisper::WhisperRsBackend;
-use asr_core::asr::{AsrConfig, StreamingAsrBackend};
+use asr_core::asr::{AsrConfig, AsrProfile};
+use asr_whisper::{WhisperDecodeOptions, WhisperRsBackend};
 
 const SR: usize = 16_000;
 const OUT_DIR: &str = "/private/tmp/claude-501/-Users-kwonjunho-Desktop-work-tauri-stt-test/68e638b0-f4c7-4dbb-ba6f-f5c9ca7534ca/scratchpad/sweep";
@@ -17,19 +17,34 @@ const OUT_DIR: &str = "/private/tmp/claude-501/-Users-kwonjunho-Desktop-work-tau
 async fn q5_bench() {
     let base = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let model = base.join("models/ggml/ggml-large-v3-turbo-q5_0.bin");
+    let coreml = base.join("models/ggml/ggml-large-v3-turbo-encoder.mlmodelc");
     assert!(model.exists(), "Q5_0 모델 없음: {model:?}");
+    assert!(
+        coreml.exists() || allow_q5_without_coreml(),
+        "Q5 realtime 벤치는 CoreML encoder가 필요함: {coreml:?}"
+    );
     let mut r = hound::WavReader::open(base.join("test-data/meeting.wav")).expect("wav");
-    let audio: Vec<f32> = r.samples::<i16>().map(|s| s.unwrap() as f32 / 32768.0).collect();
+    let audio: Vec<f32> = r
+        .samples::<i16>()
+        .map(|s| s.unwrap() as f32 / 32768.0)
+        .collect();
+    let bench_sec = std::env::var("BENCH_SEC")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .unwrap_or(90)
+        .max(1);
+    let sample_limit = (bench_sec * SR).min(audio.len());
+    let audio = &audio[..sample_limit];
     let audio_sec = audio.len() as f64 / SR as f64;
     std::fs::create_dir_all(OUT_DIR).ok();
 
     // 1) 풀패스 정확도 + RTF
-    let be = WhisperRsBackend::load(&model, Some("ko".into())).expect("load");
-    let _ = be.transcribe(&audio[..SR.min(audio.len())], "");
+    let opts = WhisperDecodeOptions::for_profile(AsrProfile::RealtimeQ5);
+    let be = WhisperRsBackend::load_with_options(&model, Some("ko".into()), opts).expect("load");
+    let _ = be.transcribe_text(&audio[..SR.min(audio.len())], "", opts);
     let t0 = Instant::now();
-    let toks = be.transcribe(&audio, "").expect("transcribe");
+    let text = be.transcribe_text(&audio, "", opts).expect("transcribe");
     let full_ms = t0.elapsed().as_secs_f64() * 1000.0;
-    let text: String = toks.iter().map(|t| t.text.as_str()).collect();
     std::fs::write(format!("{OUT_DIR}/ggml-large-v3-turbo-q5_0.txt"), &text).ok();
     eprintln!(
         "[Q5_0 풀패스] {:.1}s (RTF {:.3})",
@@ -37,16 +52,18 @@ async fn q5_bench() {
         full_ms / 1000.0 / audio_sec
     );
 
-    // 2) 스트리밍 레이턴시(90s)
+    // 2) 스트리밍 레이턴시(BENCH_SEC)
     let mut sb = asr_whisper::self_streaming_backend(base.join("models/ggml"));
     sb.configure(&AsrConfig {
         model_id: "ggml-large-v3-turbo-q5_0".into(),
         language: Some("ko".into()),
+        profile: AsrProfile::RealtimeQ5,
         ..AsrConfig::default()
     })
     .await
     .expect("configure");
-    let n = 90usize.min(audio.len() / SR);
+    sb.warmup().await.expect("warmup");
+    let n = bench_sec.min(audio.len() / SR);
     let mut ticks: Vec<f64> = Vec::new();
     let (mut lag, mut lagn, mut over) = (0.0f64, 0usize, 0usize);
     for i in 0..n {
@@ -75,4 +92,10 @@ async fn q5_bench() {
         over,
         n
     );
+}
+
+fn allow_q5_without_coreml() -> bool {
+    std::env::var("ASR_Q5_ALLOW_NO_COREML")
+        .map(|v| matches!(v.to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+        .unwrap_or(false)
 }

@@ -24,10 +24,16 @@ impl PyannoteDiarizer {
         threshold: f32,
         num_threads: i32,
     ) -> Result<Self, String> {
-        let debug = if std::env::var("DIAR_DEBUG").is_ok() { 1 } else { 0 };
+        let debug = if std::env::var("DIAR_DEBUG").is_ok() {
+            1
+        } else {
+            0
+        };
         // CString 들은 Create 호출 동안 살아있어야 함(config 가 포인터를 참조).
-        let seg = CString::new(seg_model.as_ref().to_string_lossy().as_bytes()).map_err(|e| e.to_string())?;
-        let emb = CString::new(emb_model.as_ref().to_string_lossy().as_bytes()).map_err(|e| e.to_string())?;
+        let seg = CString::new(seg_model.as_ref().to_string_lossy().as_bytes())
+            .map_err(|e| e.to_string())?;
+        let emb = CString::new(emb_model.as_ref().to_string_lossy().as_bytes())
+            .map_err(|e| e.to_string())?;
         let provider = CString::new("cpu").unwrap();
 
         let config = sys::SherpaOnnxOfflineSpeakerDiarizationConfig {
@@ -60,13 +66,20 @@ impl PyannoteDiarizer {
     }
 
     /// models_dir 기준 기본 경로 + int8 segmentation + 코어수 스레드.
-    pub fn with_paths(models_dir: impl AsRef<Path>, num_speakers: Option<i32>) -> Result<Self, String> {
+    pub fn with_paths(
+        models_dir: impl AsRef<Path>,
+        num_speakers: Option<i32>,
+    ) -> Result<Self, String> {
         let d = models_dir.as_ref();
         // int8 segmentation(있으면) 우선 → 더 빠름.
         let seg_dir = d.join("diar/sherpa-onnx-pyannote-segmentation-3-0");
         let seg = {
             let int8 = seg_dir.join("model.int8.onnx");
-            if int8.exists() { int8 } else { seg_dir.join("model.onnx") }
+            if int8.exists() {
+                int8
+            } else {
+                seg_dir.join("model.onnx")
+            }
         };
         let emb = d.join("speaker/campplus.onnx");
         if !seg.exists() {
@@ -75,8 +88,14 @@ impl PyannoteDiarizer {
         if !emb.exists() {
             return Err(format!("임베딩 모델 없음: {emb:?}"));
         }
-        let threads = std::thread::available_parallelism().map(|n| n.get() as i32).unwrap_or(4).clamp(2, 8);
-        eprintln!("[diar] pyannote: seg={:?}, threads={threads}", seg.file_name().unwrap());
+        let threads = std::thread::available_parallelism()
+            .map(|n| n.get() as i32)
+            .unwrap_or(4)
+            .clamp(2, 8);
+        eprintln!(
+            "[diar] pyannote: seg={:?}, threads={threads}",
+            seg.file_name().unwrap()
+        );
         Self::new(seg, emb, num_speakers, 0.5, threads)
     }
 }

@@ -33,7 +33,10 @@ fn bench(name: &str, dir: PathBuf) {
     let out = asr_mlx::encode(&w, &mel, n_layers, n_head).expect("encode");
     out.eval().expect("eval");
     let ms = t0.elapsed().as_secs_f64() * 1000.0;
-    eprintln!("=== {name}: 인코더 30초 forward = {ms:.0}ms, 출력 {:?} ({n_layers}층/{n_head}헤드)", out.shape());
+    eprintln!(
+        "=== {name}: 인코더 30초 forward = {ms:.0}ms, 출력 {:?} ({n_layers}층/{n_head}헤드)",
+        out.shape()
+    );
 }
 
 #[test]

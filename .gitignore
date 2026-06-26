@@ -24,6 +24,7 @@ venv/
 
 # Tooling scratch
 .symposium/
+.cache/
 
 # 빌드 도구(cmake venv)·다운로드 모델·테스트 자산은 커밋하지 않음
 app/src-tauri/.cmake-venv/

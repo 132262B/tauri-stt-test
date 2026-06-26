@@ -74,6 +74,21 @@ body {
   margin: 0 0 8px;
 }
 
+.transcript-pane h2 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.diar-status {
+  color: #1565c0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
 .panel {
   border: 1px solid #e2e2e2;
   border-radius: 8px;
@@ -99,6 +114,11 @@ button {
 
 button:active {
   opacity: 0.85;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .error {

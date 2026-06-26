@@ -21,7 +21,10 @@ pub fn list_devices() -> Vec<String> {
 }
 
 /// 입력 장치에서 캡처를 시작한다. device_name=None 이면 기본 장치. 16kHz mono `AudioFrame` 송신.
-pub fn start_mic(tx: Sender<AudioFrame>, device_name: Option<String>) -> Result<CaptureControl, String> {
+pub fn start_mic(
+    tx: Sender<AudioFrame>,
+    device_name: Option<String>,
+) -> Result<CaptureControl, String> {
     let (stop_tx, stop_rx) = channel::<()>();
     let (ready_tx, ready_rx) = channel::<Result<(), String>>();
 
@@ -44,7 +47,10 @@ pub fn start_mic(tx: Sender<AudioFrame>, device_name: Option<String>) -> Result<
     }
 }
 
-fn build_and_play(tx: Sender<AudioFrame>, device_name: Option<String>) -> Result<cpal::Stream, String> {
+fn build_and_play(
+    tx: Sender<AudioFrame>,
+    device_name: Option<String>,
+) -> Result<cpal::Stream, String> {
     let host = cpal::default_host();
     let device = match device_name {
         Some(name) if !name.is_empty() => host
@@ -57,9 +63,7 @@ fn build_and_play(tx: Sender<AudioFrame>, device_name: Option<String>) -> Result
             .ok_or("기본 입력 장치를 찾을 수 없음")?,
     };
     let dev_name = device.name().unwrap_or_else(|_| "?".into());
-    let supported = device
-        .default_input_config()
-        .map_err(|e| e.to_string())?;
+    let supported = device.default_input_config().map_err(|e| e.to_string())?;
     let in_sr = supported.sample_rate().0;
     let channels = supported.channels() as usize;
     let fmt = supported.sample_format();
@@ -80,7 +84,10 @@ fn build_and_play(tx: Sender<AudioFrame>, device_name: Option<String>) -> Result
         let dur = out.len() as f64 / TARGET_SR as f64;
         let t_start = t_cursor;
         t_cursor += dur;
-        eprintln!("[capture] 16k {}샘플 rms={rms:.4} t={t_start:.2}s", out.len());
+        eprintln!(
+            "[capture] 16k {}샘플 rms={rms:.4} t={t_start:.2}s",
+            out.len()
+        );
         let _ = tx.send(AudioFrame {
             samples: out,
             t_start,
@@ -110,7 +117,10 @@ fn build_and_play(tx: Sender<AudioFrame>, device_name: Option<String>) -> Result
         cpal::SampleFormat::U16 => device.build_input_stream(
             &config,
             move |data: &[u16], _| {
-                let f: Vec<f32> = data.iter().map(|s| (*s as f32 - 32768.0) / 32768.0).collect();
+                let f: Vec<f32> = data
+                    .iter()
+                    .map(|s| (*s as f32 - 32768.0) / 32768.0)
+                    .collect();
                 process_mono(downmix(&f, channels));
             },
             err_fn,

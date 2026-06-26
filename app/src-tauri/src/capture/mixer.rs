@@ -15,7 +15,11 @@ const SR: f64 = 16_000.0;
 const MIX_CHUNK: usize = 1600; // 100ms
 
 /// mic_rx + sys_rx 를 합성해 out 으로 보내는 스레드를 띄운다. 두 소스가 모두 끝나면 종료.
-pub fn spawn_mixer(mic_rx: Receiver<AudioFrame>, sys_rx: Receiver<AudioFrame>, out: Sender<AudioFrame>) {
+pub fn spawn_mixer(
+    mic_rx: Receiver<AudioFrame>,
+    sys_rx: Receiver<AudioFrame>,
+    out: Sender<AudioFrame>,
+) {
     thread::spawn(move || {
         let mut mic: VecDeque<f32> = VecDeque::new();
         let mut sys: VecDeque<f32> = VecDeque::new();

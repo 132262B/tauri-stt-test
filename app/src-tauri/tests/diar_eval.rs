@@ -28,7 +28,10 @@ async fn diarization_eval() {
     std::fs::create_dir_all(OUT_DIR).ok();
 
     let mut r = hound::WavReader::open(&wav).expect("wav");
-    let audio: Vec<f32> = r.samples::<i16>().map(|s| s.unwrap() as f32 / 32768.0).collect();
+    let audio: Vec<f32> = r
+        .samples::<i16>()
+        .map(|s| s.unwrap() as f32 / 32768.0)
+        .collect();
     let audio_sec = audio.len() as f64 / SR as f64;
 
     let backend = asr_whisper::self_streaming_backend(base.join("models/ggml"));
@@ -55,7 +58,10 @@ async fn diarization_eval() {
             let end = (i + SR).min(audio.len());
             t += (end - i) as f64 / SR as f64;
             let _ = pcm_tx
-                .send(AudioChunk { samples: audio[i..end].to_vec(), t_end: t })
+                .send(AudioChunk {
+                    samples: audio[i..end].to_vec(),
+                    t_end: t,
+                })
                 .await;
             i = end;
         }
@@ -117,7 +123,11 @@ async fn diarization_eval() {
     eprintln!("총 라인 {}개, 화자 전환 {switches}회", snap.lines.len());
     eprintln!("화자별 분포(라인수, 글자수):");
     for (k, (lines, chars)) in &by_spk {
-        let name = if *k < 0 { "미상".into() } else { format!("화자 {}", k + 1) };
+        let name = if *k < 0 {
+            "미상".into()
+        } else {
+            format!("화자 {}", k + 1)
+        };
         eprintln!("  {name}: {lines}라인 / {chars}자");
     }
     eprintln!("\n--- 라벨 전사 앞부분(20라인) ---");

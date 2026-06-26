@@ -4,6 +4,6 @@ mod backend;
 pub mod self_stream;
 mod token;
 
-pub use backend::{AsrConfig, BackendCaps, StreamingAsrBackend};
+pub use backend::{AsrConfig, AsrProfile, BackendCaps, StreamingAsrBackend};
 pub use self_stream::{SelfStreamingBackend, SelfStreamingProcessor};
 pub use token::{AsrError, AsrToken};

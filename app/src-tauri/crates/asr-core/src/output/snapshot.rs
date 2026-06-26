@@ -22,7 +22,7 @@ pub struct TranscriptLine {
     pub end: f64,
 }
 
-/// 전사 스냅샷(전체 모드). diff/relabel·소급 화자 정정은 P2에서 확장.
+/// 전사 스냅샷(전체 모드).
 #[derive(Clone, Debug, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TranscriptSnapshot {
@@ -38,6 +38,8 @@ pub struct TranscriptSnapshot {
     pub upto: f64,
     /// 이번 iter 에 새로 확정된 토큰(누적용 — 내보내기에서 사용).
     pub new_committed: Vec<CommittedToken>,
+    /// true면 new_committed 를 누적하지 않고 기존 누적 토큰 전체를 교체한다.
+    pub replace_committed: bool,
 }
 
 /// 자원/성능 스냅샷 (docs/02-architecture.md H). 1초 주기 emit.

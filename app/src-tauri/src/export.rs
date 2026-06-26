@@ -138,7 +138,10 @@ mod tests {
             tok(3.0, 3.5, " Next"),
         ];
         let srt = to_srt(&toks);
-        assert!(srt.contains("1\n00:00:00,000 --> 00:00:01,000\nHello world."), "{srt}");
+        assert!(
+            srt.contains("1\n00:00:00,000 --> 00:00:01,000\nHello world."),
+            "{srt}"
+        );
         assert!(srt.contains("Next"), "{srt}");
     }
 
@@ -156,4 +159,3 @@ mod tests {
         assert_eq!(srt_time(3661.5), "01:01:01,500");
     }
 }
-

@@ -13,7 +13,10 @@ use diar_pyannote::PyannoteDiarizer;
 fn diar_time_vs_length() {
     let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let mut r = hound::WavReader::open(base.join("test-data/meeting.wav")).expect("wav");
-    let all: Vec<f32> = r.samples::<i16>().map(|s| s.unwrap() as f32 / 32768.0).collect();
+    let all: Vec<f32> = r
+        .samples::<i16>()
+        .map(|s| s.unwrap() as f32 / 32768.0)
+        .collect();
     let mut d = PyannoteDiarizer::with_paths(base.join("models"), None).expect("diar");
 
     eprintln!("\n##### 화자분리 소요시간 vs 오디오 길이 #####");
@@ -30,5 +33,7 @@ fn diar_time_vs_length() {
             segs.len()
         );
     }
-    eprintln!("\n참고: 앱은 ~10초마다 '누적 오디오 전체'를 재분석 → 길어질수록 위 시간만큼 매번 듦.");
+    eprintln!(
+        "\n참고: 앱은 ~10초마다 '누적 오디오 전체'를 재분석 → 길어질수록 위 시간만큼 매번 듦."
+    );
 }

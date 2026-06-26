@@ -28,7 +28,11 @@ impl SessionMetrics {
         if let Ok(mut g) = self.inner.lock() {
             if audio_sec > 0.0 {
                 let inst = (infer_ms / 1000.0) / audio_sec;
-                g.rtf = if g.rtf == 0.0 { inst } else { 0.7 * g.rtf + 0.3 * inst };
+                g.rtf = if g.rtf == 0.0 {
+                    inst
+                } else {
+                    0.7 * g.rtf + 0.3 * inst
+                };
             }
             g.latencies_ms.push(infer_ms);
             let len = g.latencies_ms.len();

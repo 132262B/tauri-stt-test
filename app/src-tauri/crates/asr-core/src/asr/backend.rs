@@ -8,6 +8,7 @@ pub struct AsrConfig {
     pub model_id: String,
     pub language: Option<String>,
     pub trimming_sec: f32,
+    pub profile: AsrProfile,
 }
 
 impl Default for AsrConfig {
@@ -16,7 +17,58 @@ impl Default for AsrConfig {
             model_id: "mlx-community/whisper-large-v3-turbo".to_string(),
             language: None,
             trimming_sec: 15.0,
+            profile: AsrProfile::Auto,
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum AsrProfile {
+    /// Pick the safest profile from model_id.
+    #[default]
+    Auto,
+    /// Preserve the historical decoding behavior.
+    Balanced,
+    /// Low-latency Q5_0 turbo profile for live captions.
+    RealtimeQ5,
+}
+
+impl AsrConfig {
+    pub fn effective_profile(&self) -> AsrProfile {
+        match self.profile {
+            AsrProfile::Auto if is_q5_turbo(&self.model_id) => AsrProfile::RealtimeQ5,
+            AsrProfile::Auto => AsrProfile::Balanced,
+            p => p,
+        }
+    }
+}
+
+fn is_q5_turbo(model_id: &str) -> bool {
+    let m = model_id.to_ascii_lowercase();
+    m.contains("large-v3-turbo") && m.contains("q5_0")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn auto_uses_realtime_profile_for_q5_turbo() {
+        let cfg = AsrConfig {
+            model_id: "ggml-large-v3-turbo-q5_0".into(),
+            ..AsrConfig::default()
+        };
+        assert_eq!(cfg.effective_profile(), AsrProfile::RealtimeQ5);
+    }
+
+    #[test]
+    fn explicit_balanced_overrides_q5_turbo_detection() {
+        let cfg = AsrConfig {
+            model_id: "ggml-large-v3-turbo-q5_0".into(),
+            profile: AsrProfile::Balanced,
+            ..AsrConfig::default()
+        };
+        assert_eq!(cfg.effective_profile(), AsrProfile::Balanced);
     }
 }
 

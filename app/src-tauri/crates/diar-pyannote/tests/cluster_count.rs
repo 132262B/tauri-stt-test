@@ -10,11 +10,19 @@ fn run(seg: &PathBuf, emb: &PathBuf, audio: &[f32], num: Option<i32>, thr: f32) 
     let mut d = Diarize::new(
         seg,
         emb,
-        DiarizeConfig { num_clusters: num, threshold: Some(thr), ..Default::default() },
+        DiarizeConfig {
+            num_clusters: num,
+            threshold: Some(thr),
+            ..Default::default()
+        },
     )
     .expect("diar");
     let segs = d.compute(audio.to_vec(), None).expect("compute");
-    let n = segs.iter().map(|s| s.speaker).collect::<BTreeSet<_>>().len();
+    let n = segs
+        .iter()
+        .map(|s| s.speaker)
+        .collect::<BTreeSet<_>>()
+        .len();
     (n, segs.len())
 }
 
@@ -25,7 +33,10 @@ fn cluster_count_sweep() {
     let seg = base.join("models/diar/sherpa-onnx-pyannote-segmentation-3-0/model.onnx");
     let emb = base.join("models/speaker/campplus.onnx");
     let mut r = hound::WavReader::open(base.join("test-data/meeting.wav")).expect("wav");
-    let all: Vec<f32> = r.samples::<i16>().map(|s| s.unwrap() as f32 / 32768.0).collect();
+    let all: Vec<f32> = r
+        .samples::<i16>()
+        .map(|s| s.unwrap() as f32 / 32768.0)
+        .collect();
     let audio = &all[..(150 * 16_000).min(all.len())]; // 앞 150초(4명 다 등장)
 
     eprintln!("\n=== 화자 수 강제/자동 비교 (앞 150s) ===");

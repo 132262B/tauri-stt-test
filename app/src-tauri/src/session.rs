@@ -46,10 +46,10 @@ pub fn start(
 
     use asr_core::asr::{AsrConfig, StreamingAsrBackend};
     use asr_core::diar::Diarizer;
-    use asr_core::vad::Vad;
     use asr_core::metrics::SessionMetrics;
     use asr_core::output::{MetricsSnapshot, TranscriptSnapshot};
     use asr_core::pipeline::{run_session, AudioChunk};
+    use asr_core::vad::Vad;
 
     use crate::capture::{mic_cpal, AudioFrame};
 
@@ -66,6 +66,11 @@ pub fn start(
         language: lang,
         ..AsrConfig::default()
     };
+    let profile = cfg.effective_profile();
+    eprintln!(
+        "[session] start model={} profile={profile:?} input={} device={:?} diarize={}",
+        model_id, input, device, diarize
+    );
     let model = model_id.clone();
     let metrics = SessionMetrics::default();
     let running = Arc::new(AtomicBool::new(true));
@@ -148,7 +153,11 @@ pub fn start(
     // 임계값은 "진짜 무음(뮤트/디지털 무음)" 만 스킵하도록 낮게 둔다 — 높이면 작은 마이크의
     // 실제 발화를 무음으로 오판해 전사가 늦게 뜬다. CPU 폭주는 버퍼 하드 캡이 막으므로,
     // VAD 는 즉시성을 해치지 않는 선에서만 절약한다.
-    let vad: Option<Box<dyn Vad>> = Some(Box::new(vad_energy::EnergyVad::new(0.0015)));
+    let vad: Option<Box<dyn Vad>> = if profile == asr_core::asr::AsrProfile::RealtimeQ5 {
+        None
+    } else {
+        Some(Box::new(vad_energy::EnergyVad::new(0.0015)))
+    };
 
     let metrics_for_driver = metrics.clone();
     let reset_for_driver = reset.clone();
@@ -174,8 +183,10 @@ pub fn start(
     let log_tx = transcript_log.clone();
     tauri::async_runtime::spawn(async move {
         while let Some(snap) = snap_rx.recv().await {
-            if !snap.new_committed.is_empty() {
-                if let Ok(mut g) = log_tx.lock() {
+            if let Ok(mut g) = log_tx.lock() {
+                if snap.replace_committed {
+                    *g = snap.new_committed.clone();
+                } else if !snap.new_committed.is_empty() {
                     g.extend(snap.new_committed.iter().cloned());
                 }
             }
@@ -216,7 +227,15 @@ pub fn start(
                 rtf: mc.rtf,
                 latency_ms_p50: mc.latency_p50,
                 latency_ms_p95: mc.latency_p95,
-                backend: "mlx_whisper".into(),
+                backend: if profile == asr_core::asr::AsrProfile::RealtimeQ5 {
+                    "whisper_realtime_q5".into()
+                } else if model.starts_with("qwen") {
+                    "qwen".into()
+                } else if model == "sensevoice" {
+                    "sensevoice".into()
+                } else {
+                    "whisper".into()
+                },
                 model: model.clone(),
             };
             if app_metrics.emit("metrics_update", &snap).is_err() {
@@ -248,6 +267,11 @@ pub fn start(
         "file" => vec![crate::capture::file_src::start_file(af_tx, demo_wav())?],
         _ => vec![mic_cpal::start_mic(af_tx, device.clone())?],
     };
+    eprintln!(
+        "[session] capture started input={} count={}",
+        input,
+        captures.len()
+    );
 
     Ok(SessionHandle {
         captures,

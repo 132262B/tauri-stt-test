@@ -125,13 +125,14 @@ impl SelfStreamingBackend for QwenBackend {
         if samples.is_empty() {
             return Ok(String::new());
         }
-        let ptr = unsafe {
-            qwen_transcribe_audio(self.ctx, samples.as_ptr(), samples.len() as c_int)
-        };
+        let ptr =
+            unsafe { qwen_transcribe_audio(self.ctx, samples.as_ptr(), samples.len() as c_int) };
         if ptr.is_null() {
             return Err(AsrError::Inference("Qwen3-ASR 전사 실패".into()));
         }
-        let text = unsafe { CStr::from_ptr(ptr) }.to_string_lossy().into_owned();
+        let text = unsafe { CStr::from_ptr(ptr) }
+            .to_string_lossy()
+            .into_owned();
         unsafe { free(ptr as *mut c_void) };
         Ok(text.trim().to_string())
     }
@@ -168,13 +169,14 @@ fn ensure_model(dir: &Path, spec: &QwenModelSpec) -> Result<(), String> {
         let expected: Option<u64> = resp.header("Content-Length").and_then(|v| v.parse().ok());
         let tmp = path.with_extension("part");
         let mut f = std::fs::File::create(&tmp).map_err(|e| e.to_string())?;
-        let written =
-            std::io::copy(&mut resp.into_reader(), &mut f).map_err(|e| e.to_string())?;
+        let written = std::io::copy(&mut resp.into_reader(), &mut f).map_err(|e| e.to_string())?;
         drop(f);
         if let Some(exp) = expected {
             if written != exp {
                 let _ = std::fs::remove_file(&tmp);
-                return Err(format!("{name} 다운로드 손상({written}/{exp}B). 재시도 필요."));
+                return Err(format!(
+                    "{name} 다운로드 손상({written}/{exp}B). 재시도 필요."
+                ));
             }
         }
         std::fs::rename(&tmp, &path).map_err(|e| e.to_string())?;

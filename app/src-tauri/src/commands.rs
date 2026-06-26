@@ -50,7 +50,9 @@ pub fn start_session(
         let device = device.filter(|s| !s.is_empty());
         let diarize = diarize.unwrap_or(true);
         // 새 세션 시작 시 리셋 플래그 클리어.
-        state.reset.store(false, std::sync::atomic::Ordering::Relaxed);
+        state
+            .reset
+            .store(false, std::sync::atomic::Ordering::Relaxed);
         let handle = crate::session::start(
             app,
             state.transcript.clone(),
@@ -77,7 +79,9 @@ pub fn clear_transcript(state: State<AppState>) -> Result<(), String> {
     if let Ok(mut g) = state.transcript.lock() {
         g.clear();
     }
-    state.reset.store(true, std::sync::atomic::Ordering::Relaxed);
+    state
+        .reset
+        .store(true, std::sync::atomic::Ordering::Relaxed);
     Ok(())
 }
 
@@ -93,7 +97,11 @@ pub fn stop_session(state: State<AppState>) -> Result<(), String> {
 
 /// 현재 세션 전사를 파일로 내보낸다(txt/srt/json). path 는 프론트 저장 대화상자에서.
 #[tauri::command]
-pub fn export_transcript(state: State<AppState>, path: String, format: String) -> Result<String, String> {
+pub fn export_transcript(
+    state: State<AppState>,
+    path: String,
+    format: String,
+) -> Result<String, String> {
     let tokens = state
         .transcript
         .lock()

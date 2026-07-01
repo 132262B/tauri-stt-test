@@ -228,14 +228,28 @@ fn assign_speakers(tokens: &mut [AsrToken], segments: &[DiarSegment]) {
     }
 }
 
-/// 전체 토큰 + 최신 diar 세그먼트로 화자별 라인 구성(화자 바뀌거나 공백 크면 분리).
+/// 문장 종결부호(. ? ! 。 ？ ！ …)로 끝나는지. 닫는 따옴표/괄호는 무시하고 마지막 실문자로 판정.
+fn ends_sentence(text: &str) -> bool {
+    let trimmed = text.trim_end_matches(|c: char| {
+        c.is_whitespace() || matches!(c, '"' | '\'' | ')' | ']' | '»' | '”' | '’')
+    });
+    matches!(
+        trimmed.chars().last(),
+        Some('.' | '?' | '!' | '。' | '？' | '！' | '…')
+    )
+}
+
+/// 전체 토큰 + 최신 diar 세그먼트로 화자별 라인 구성(화자 바뀌거나 공백 크거나 문장 끝나면 분리).
 fn build_lines(tokens: &[AsrToken], segments: &[DiarSegment]) -> Vec<TranscriptLine> {
     let mut lines: Vec<TranscriptLine> = Vec::new();
     for t in tokens {
         let spk = speaker_at(segments, t.start, t.end);
+        // 문장 종결부호로 끝난 라인은 더 이어붙이지 않는다 — 라이브 윈도우 백엔드는 단어를
+        // 균등 근사 타임스탬프로 확정해 시간 공백(LINE_GAP_SEC)이 거의 안 생기므로, 이게 없으면
+        // 전사가 한 줄로 뭉친다. 문장 단위로 끊어 가독성/화자 라인 매핑을 개선.
         let extend = lines
             .last()
-            .map(|l| l.speaker == spk && (t.start - l.end) < LINE_GAP_SEC)
+            .map(|l| l.speaker == spk && (t.start - l.end) < LINE_GAP_SEC && !ends_sentence(&l.text))
             .unwrap_or(false);
         if extend {
             let last = lines.last_mut().unwrap();
@@ -282,6 +296,41 @@ mod tests {
 
     use super::*;
     use crate::asr::{BackendCaps, StreamingAsrBackend};
+
+    fn tok(text: &str, start: f64, end: f64) -> AsrToken {
+        AsrToken {
+            start,
+            end,
+            text: text.into(),
+            probability: None,
+            detected_language: None,
+            speaker: None,
+        }
+    }
+
+    #[test]
+    fn sentence_final_punctuation_breaks_line() {
+        // 시간 공백이 거의 없어도(<LINE_GAP_SEC) 문장 종결부호에서 라인이 갈린다.
+        let tokens = vec![
+            tok("안녕하세요.", 0.0, 1.0),
+            tok(" 오늘 회의를 시작합니다", 1.0, 2.0),
+        ];
+        let lines = build_lines(&tokens, &[]);
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0].text, "안녕하세요.");
+    }
+
+    #[test]
+    fn non_terminated_tokens_stay_on_one_line() {
+        let tokens = vec![
+            tok("오늘", 0.0, 0.5),
+            tok(" 회의를", 0.5, 1.0),
+            tok(" 시작합니다.", 1.0, 1.5),
+        ];
+        let lines = build_lines(&tokens, &[]);
+        assert_eq!(lines.len(), 1);
+        assert_eq!(lines[0].text, "오늘 회의를 시작합니다.");
+    }
 
     struct FinalTokenBackend;
 

@@ -251,7 +251,11 @@ impl WhisperRsBackend {
             }
             if let Ok(st) = seg.to_str() {
                 let st = st.trim();
-                if st.is_empty() || st.starts_with('[') || st.starts_with('(') {
+                if st.is_empty()
+                    || st.starts_with('[')
+                    || st.starts_with('(')
+                    || is_hallucination_phrase(st)
+                {
                     continue;
                 }
             }
@@ -314,7 +318,11 @@ impl WhisperRsBackend {
             }
             let Ok(seg_text) = seg.to_str() else { continue };
             let st = seg_text.trim();
-            if st.is_empty() || st.starts_with('[') || st.starts_with('(') {
+            if st.is_empty()
+                || st.starts_with('[')
+                || st.starts_with('(')
+                || is_hallucination_phrase(st)
+            {
                 continue;
             }
             text.push_str(seg_text);
@@ -354,7 +362,11 @@ impl WhisperRsBackend {
             let Ok(seg_text) = seg.to_str() else { continue };
             let text = clean_transcript_text(seg_text);
             let text = text.trim();
-            if text.is_empty() || text.starts_with('[') || text.starts_with('(') {
+            if text.is_empty()
+                || text.starts_with('[')
+                || text.starts_with('(')
+                || is_hallucination_phrase(text)
+            {
                 continue;
             }
             let start = (seg.start_timestamp().max(0) as f64) / 100.0;
@@ -400,6 +412,11 @@ impl WhisperRsBackend {
         if let Some(n_max_text_ctx) = options.n_max_text_ctx {
             params.set_n_max_text_ctx(n_max_text_ctx);
         }
+        // 무음/음악 구간의 유령 토큰(공백 토큰·비음성 토큰 ♪ 등) 생성을 디코드 단계에서
+        // 억제한다. 사후 필터(is_hallucination_phrase)와 이중 방어 — anarlog whisper-local 도
+        // set_suppress_blank/nst 를 켠다. 정상 발화 토큰에는 영향이 없다.
+        params.set_suppress_blank(true);
+        params.set_suppress_nst(true);
         params.set_print_special(false);
         params.set_print_progress(false);
         params.set_print_realtime(false);
@@ -620,6 +637,40 @@ fn is_short_filler_word(word: &str) -> bool {
         "아" | "어" | "음" | "으" | "흠" | "ah" | "uh" | "um" | "hmm"
     )
 }
+
+/// whisper 가 무음/음악 구간에 흔히 뱉는 유튜브 자막류 정형 문구(환각) 여부.
+/// 세그먼트 **전체**가 (공백·구두점 무시, 소문자화) 목록과 정확히 일치할 때만 참 — 실제 발화
+/// 속 부분일치("…시청해주셔서 감사합니다 라고 했죠")는 보존한다. anarlog whisper-local 의
+/// `filter_segments`("you"/"thank you"/"♪")를 한국어 보일러플레이트까지 확장한 것.
+fn is_hallucination_phrase(text: &str) -> bool {
+    let norm: String = text
+        .chars()
+        .filter(|c| !c.is_whitespace() && !is_noise_punct(*c))
+        .flat_map(char::to_lowercase)
+        .collect();
+    !norm.is_empty() && HALLUCINATION_PHRASES.contains(&norm.as_str())
+}
+
+/// 이미 정규화된(공백·구두점 제거, 소문자) 형태로 보관 — 비교 비용 최소화. 회의 전사에서
+/// 통째로 등장하면 사실상 100% 환각인 문구만 넣는다(예: 단독 "감사합니다"는 실제 발화라 제외).
+const HALLUCINATION_PHRASES: &[&str] = &[
+    // 영어: whisper 가 무음/노이즈에 뱉는 대표 환각
+    "you",
+    "thankyou",
+    "thankyouforwatching",
+    "thanksforwatching",
+    "pleasesubscribe",
+    "♪",
+    // 한국어: large-v3-turbo 가 무음에 뱉는 유튜브 자막 보일러플레이트
+    "시청해주셔서감사합니다",
+    "지금까지시청해주셔서감사합니다",
+    "영상시청해주셔서감사합니다",
+    "구독과좋아요부탁드립니다",
+    "구독좋아요알림설정",
+    "다음영상에서만나요",
+    "다음시간에만나요",
+    "이영상은유료광고를포함하고있습니다",
+];
 
 static WHISPER_LOGGING_HOOKS: Once = Once::new();
 
@@ -1392,6 +1443,23 @@ mod tests {
     fn normal_text_is_kept() {
         let text = "오늘 회의에서는 Q5 모델 성능을 테스트합니다.";
         assert_eq!(clean_transcript_text(text), text);
+    }
+
+    #[test]
+    fn hallucination_boilerplate_is_detected() {
+        // 공백/구두점이 어떻게 붙어 나오든 통째 일치하면 환각으로 본다.
+        assert!(is_hallucination_phrase("시청해 주셔서 감사합니다."));
+        assert!(is_hallucination_phrase("Thank you."));
+        assert!(is_hallucination_phrase("♪"));
+        assert!(is_hallucination_phrase("구독과 좋아요 부탁드립니다"));
+    }
+
+    #[test]
+    fn real_speech_is_not_flagged_as_hallucination() {
+        // 부분일치·정상 발화·단독 "감사합니다" 는 보존.
+        assert!(!is_hallucination_phrase("감사합니다"));
+        assert!(!is_hallucination_phrase("시청해주셔서 감사합니다 라고 인사했어요"));
+        assert!(!is_hallucination_phrase("오늘 회의를 시작하겠습니다."));
     }
 
     #[test]

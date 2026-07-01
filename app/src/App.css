@@ -178,8 +178,9 @@ button:disabled {
   white-space: pre-wrap;
 }
 
+/* 진행 중(확정 전) 텍스트 — 확정과 구분되게 흐리게(faded) 이탤릭으로, 깜빡임 없이 계속 갱신된다. */
 .line-text.partial {
-  opacity: 0.45;
+  opacity: 0.6;
   font-style: italic;
 }
 

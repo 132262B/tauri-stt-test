@@ -64,6 +64,15 @@ function fmtTime(sec: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
+// 미리보기(흐린 글씨)를 단어별로 흐르게 — 앞에서부터 n단어만 노출.
+function wordsOf(text: string): string[] {
+  const t = text.trim();
+  return t ? t.split(/\s+/) : [];
+}
+function revealWords(text: string, n: number): string {
+  return wordsOf(text).slice(0, n).join(" ");
+}
+
 function App() {
   const [ipc, setIpc] = useState("연결 확인 중…");
   const [running, setRunning] = useState(false);
@@ -71,6 +80,7 @@ function App() {
   const [err, setErr] = useState("");
   const [lines, setLines] = useState<TranscriptLine[]>([]);
   const [buffer, setBuffer] = useState("");
+  const [bufShown, setBufShown] = useState(0); // 미리보기에서 현재까지 흐른 단어 수
   const [elapsedSec, setElapsedSec] = useState(0);
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [model, setModel] = useState("ggml-large-v3-turbo-q5_0");
@@ -152,7 +162,22 @@ function App() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "auto" });
-  }, [lines, buffer]);
+  }, [lines, buffer, bufShown]);
+
+  // 미리보기가 바뀌면 0부터 다시 단어별로 흐르게 한다.
+  useEffect(() => {
+    setBufShown(0);
+  }, [buffer]);
+
+  // 미리보기(흐린 글씨)를 ~45ms마다 한 단어씩 노출 → "단어별로 빨리빨리" 갱신되는 느낌.
+  useEffect(() => {
+    const total = wordsOf(buffer).length;
+    if (bufShown >= total) return;
+    const id = setInterval(() => {
+      setBufShown((n) => Math.min(total, n + 1));
+    }, 45);
+    return () => clearInterval(id);
+  }, [buffer, bufShown]);
 
   useEffect(() => {
     if (!running && !starting) return;
@@ -298,8 +323,10 @@ function App() {
             ))}
             {buffer && (
               <div className="line partial-line">
-                <span className="speaker-badge ghost">…</span>
-                <span className="line-text partial">{buffer}</span>
+                <span className="speaker-badge ghost" title="실시간 미리보기">
+                  ●
+                </span>
+                <span className="line-text partial">{revealWords(buffer, bufShown)}</span>
               </div>
             )}
           </div>

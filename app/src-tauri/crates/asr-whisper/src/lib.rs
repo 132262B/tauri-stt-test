@@ -87,6 +87,22 @@ impl WhisperDecodeOptions {
         }
     }
 
+    /// 발화 엔드포인트 경로용 — 깨끗한 발화 하나를 **1회** 풀 전사. 윈도우 재디코드용
+    /// 공격적 옵션(audio_ctx 512·max_tokens 64)은 긴 발화를 잘라 환각을 유발하므로 쓰지 않는다.
+    /// 발화당 1회라 품질을 감당할 수 있어: 인코더 컨텍스트 무제한(audio_ctx None=풀 1500),
+    /// 토큰 무제한, 멀티세그먼트(문장 경계/구두점 자연스럽게), 발화 독립(no_context).
+    pub fn for_full_utterance() -> Self {
+        Self {
+            token_timestamps: false,
+            no_timestamps: true,
+            single_segment: false,
+            no_context: true,
+            temperature_inc: q5_temp_inc(), // 반복 환각 폴백 유지(발화당 1회라 비용 감당)
+            use_gpu: realtime_q5_use_gpu(),
+            ..Self::default() // audio_ctx=None(풀 1500), max_tokens=None(무제한)
+        }
+    }
+
     pub fn for_windowed_q5() -> Self {
         let use_coreml = q5_use_coreml_encoder();
         Self {
@@ -808,6 +824,8 @@ pub struct WhisperSelfBackend {
     force_auto_language: bool,
     backend: Option<WhisperRsBackend>,
     decode_options: WhisperDecodeOptions,
+    /// true 면 프로파일 무관하게 발화 엔드포인트용 풀 전사 옵션을 쓴다(EndpointStreamingProcessor).
+    full_utterance: bool,
 }
 
 impl WhisperSelfBackend {
@@ -818,7 +836,14 @@ impl WhisperSelfBackend {
             force_auto_language: false,
             backend: None,
             decode_options: WhisperDecodeOptions::default(),
+            full_utterance: false,
         }
+    }
+
+    /// 발화 엔드포인트 경로용 — configure 시 for_full_utterance() 옵션을 쓰도록 표시.
+    pub fn full_utterance(mut self) -> Self {
+        self.full_utterance = true;
+        self
     }
 }
 
@@ -826,9 +851,16 @@ impl SelfStreamingBackend for WhisperSelfBackend {
     fn configure(&mut self, cfg: &AsrConfig) -> Result<(), AsrError> {
         let path = resolve_ggml(&self.models_dir, &cfg.model_id)?;
         let profile = cfg.effective_profile();
-        self.force_auto_language = profile == AsrProfile::RealtimeQ5;
-        self.language = language_for_profile(profile, cfg.language.clone());
-        self.decode_options = WhisperDecodeOptions::for_profile(profile);
+        if self.full_utterance {
+            // 엔드포인트 경로: 프로파일과 무관하게 풀 전사 옵션. 언어는 설정값 존중(없으면 auto).
+            self.force_auto_language = false;
+            self.language = normalized_language(cfg.language.clone());
+            self.decode_options = WhisperDecodeOptions::for_full_utterance();
+        } else {
+            self.force_auto_language = profile == AsrProfile::RealtimeQ5;
+            self.language = language_for_profile(profile, cfg.language.clone());
+            self.decode_options = WhisperDecodeOptions::for_profile(profile);
+        }
         self.backend = Some(
             WhisperRsBackend::load_with_options(&path, self.language.clone(), self.decode_options)
                 .map_err(AsrError::Inference)?,

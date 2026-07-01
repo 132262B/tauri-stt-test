@@ -139,6 +139,24 @@ pub fn start(
             &asr_qwen::QWEN_06B,
             cfg.language.clone(),
         )?
+    } else if std::env::var("ASR_ENDPOINT")
+        .map(|v| matches!(v.trim(), "1" | "true" | "on" | "yes"))
+        .unwrap_or(false)
+    {
+        // 실험(옵트인 ASR_ENDPOINT=1): 발화 엔드포인트 방식 — VAD 로 발화 경계를 잡아 발화당
+        // whisper 1회. 윈도우 재디코드/공통접두 확정을 폐기해 CPU↓·즉시성↑. VAD 는 현재 에너지
+        // (EnergyVad)이며 Box<dyn Vad> 뒤라 추후 신경망 VAD(sherpa Silero)로 한 줄 교체 가능.
+        let rms = std::env::var("ENDPOINT_RMS")
+            .ok()
+            .and_then(|v| v.trim().parse::<f32>().ok())
+            .filter(|v| v.is_finite() && *v > 0.0)
+            .unwrap_or(0.006);
+        eprintln!("[session] endpoint mode ON (energy VAD, rms={rms})");
+        let self_b = asr_whisper::WhisperSelfBackend::new(models_root.join("ggml")).full_utterance();
+        Box::new(asr_core::asr::EndpointStreamingProcessor::new(
+            self_b,
+            Box::new(vad_energy::EnergyVad::new(rms)),
+        ))
     } else {
         // Whisper 도 SelfStreaming(전체 텍스트 공통접두사 확정)으로 — 한국어에서 토큰
         // 타임스탬프 기반 LocalAgreement 의 조각/중복/어순 뒤섞임을 회피.
